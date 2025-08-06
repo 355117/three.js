@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>three.js webgl - buffergeometry - sphere movement</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
+    <link type="text/css" rel="stylesheet" href="../../main.css" />
+    <style>
+      body {
+        background-color: #000;
+        color: #fff;
+      }
+      a {
+        color: #08f;
+      }
+      #info {
+        position: absolute;
+        top: 10px;
+        width: 100%;
+        text-align: center;
+        z-index: 100;
+        display: block;
+      }
+      #controls {
+        position: absolute;
+        bottom: 10px;
+        left: 10px;
+        z-index: 100;
+        color: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="info"><a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> webgl - buffergeometry - sphere movement in plane</div>
+
+    <div id="controls">
+      <p>使用 WASD 键控制球的移动</p>
+      <p>球被限制在平面内移动</p>
+    </div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "../../../build/three.module.js",
+          "three/addons/": "../../jsm/"
+        }
+      }
+    </script>
+
+    <script type="module">
+      import * as THREE from "three";
+      import Stats from "three/addons/libs/stats.module.js";
+
+      let camera, scene, renderer, stats;
+      let sphere, plane;
+      let sphereGeometry, sphereMaterial;
+      let planeGeometry, planeMaterial;
+
+      // 球的移动参数
+      const spherePosition = new THREE.Vector3(0, 1, 0);
+      const moveSpeed = 0.1;
+      const planeSize = 10;
+      const sphereRadius = 0.5;
+
+      // 键盘输入状态
+      const keys = {
+        w: false,
+        a: false,
+        s: false,
+        d: false,
+      };
+
+      init();
+      animate();
+
+      function init() {
+        // 创建场景
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x222222);
+
+        // 创建相机
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(5, 8, 5);
+        camera.lookAt(0, 0, 0);
+
+        // 创建渲染器
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        // 添加光源
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(10, 10, 5);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.mapSize.width = 2048;
+        directionalLight.shadow.mapSize.height = 2048;
+        directionalLight.shadow.camera.near = 0.5;
+        directionalLight.shadow.camera.far = 50;
+        directionalLight.shadow.camera.left = -15;
+        directionalLight.shadow.camera.right = 15;
+        directionalLight.shadow.camera.top = 15;
+        directionalLight.shadow.camera.bottom = -15;
+        scene.add(directionalLight);
+
+        // 创建平面几何体（使用BufferGeometry）
+        planeGeometry = new THREE.PlaneGeometry(planeSize * 2, planeSize * 2, 32, 32);
+        planeMaterial = new THREE.MeshLambertMaterial({
+          color: 0x00aa00,
+          transparent: true,
+          opacity: 0.8,
+        });
+        plane = new THREE.Mesh(planeGeometry, planeMaterial);
+        plane.rotation.x = -Math.PI / 2;
+        plane.receiveShadow = true;
+        scene.add(plane);
+
+        // 创建球体几何体（使用BufferGeometry）
+        sphereGeometry = new THREE.SphereGeometry(sphereRadius, 32, 32);
+        sphereMaterial = new THREE.MeshPhongMaterial({
+          color: 0xff4444,
+          shininess: 100,
+        });
+        sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+        sphere.position.copy(spherePosition);
+        sphere.castShadow = true;
+        scene.add(sphere);
+
+        // 添加网格辅助线
+        const gridHelper = new THREE.GridHelper(planeSize * 2, 20);
+        gridHelper.position.y = 0.01;
+        scene.add(gridHelper);
+
+        // 添加坐标轴辅助线
+        const axesHelper = new THREE.AxesHelper(5);
+        scene.add(axesHelper);
+
+        // 添加性能监控
+        stats = new Stats();
+        document.body.appendChild(stats.dom);
+
+        // 添加事件监听器
+        window.addEventListener("resize", onWindowResize);
+        document.addEventListener("keydown", onKeyDown);
+        document.addEventListener("keyup", onKeyUp);
+      }
+
+      function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+
+      function onKeyDown(event) {
+        switch (event.code) {
+          case "KeyW":
+            keys.w = true;
+            break;
+          case "KeyA":
+            keys.a = true;
+            break;
+          case "KeyS":
+            keys.s = true;
+            break;
+          case "KeyD":
+            keys.d = true;
+            break;
+        }
+      }
+
+      function onKeyUp(event) {
+        switch (event.code) {
+          case "KeyW":
+            keys.w = false;
+            break;
+          case "KeyA":
+            keys.a = false;
+            break;
+          case "KeyS":
+            keys.s = false;
+            break;
+          case "KeyD":
+            keys.d = false;
+            break;
+        }
+      }
+
+      function updateSpherePosition() {
+        // 根据键盘输入更新球的位置
+        const moveVector = new THREE.Vector3();
+
+        if (keys.w) moveVector.z -= moveSpeed;
+        if (keys.s) moveVector.z += moveSpeed;
+        if (keys.a) moveVector.x -= moveSpeed;
+        if (keys.d) moveVector.x += moveSpeed;
+
+        // 更新球的位置
+        spherePosition.add(moveVector);
+
+        // 限制球在平面内移动
+        const boundary = planeSize - sphereRadius;
+        spherePosition.x = Math.max(-boundary, Math.min(boundary, spherePosition.x));
+        spherePosition.z = Math.max(-boundary, Math.min(boundary, spherePosition.z));
+
+        // 应用位置到球体
+        sphere.position.copy(spherePosition);
+      }
+
+      function animate() {
+        requestAnimationFrame(animate);
+
+        // 更新球的位置
+        updateSpherePosition();
+
+        // 添加一些视觉效果：球体轻微旋转
+        sphere.rotation.x += 0.01;
+        sphere.rotation.y += 0.01;
+
+        // 相机围绕场景旋转
+        const time = Date.now() * 0.0005;
+        camera.position.x = Math.cos(time) * 10;
+        camera.position.z = Math.sin(time) * 10;
+        camera.lookAt(sphere.position);
+
+        // 渲染场景
+        renderer.render(scene, camera);
+        stats.update();
+      }
+    </script>
+  </body>
+</html>
