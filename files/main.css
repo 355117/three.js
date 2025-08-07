@@ -224,6 +224,17 @@ hr {
 	#panel #sections a {
 		color: var(--secondary-text-color);
 	}
+	#panel #sections span {
+		cursor: pointer;
+		transition: color 0.2s ease;
+		color: var(--secondary-text-color);
+	}
+	#panel #sections span:hover {
+		color: var(--text-color);
+	}
+	#panel #sections span.selected {
+		color: var(--text-color);
+	}
 
 	body.home #panel #sections {
 		display: none;

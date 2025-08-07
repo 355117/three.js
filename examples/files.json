@@ -467,7 +467,12 @@
     "webgpu_xr_cubes",
     "webgpu_xr_native_layers"
   ],
-  "webaudio": ["webaudio_orientation", "webaudio_sandbox", "webaudio_timing", "webaudio_visualizer"],
+  "webaudio": [
+    "webaudio_orientation",
+    "webaudio_sandbox",
+    "webaudio_timing",
+    "webaudio_visualizer"
+  ],
   "webxr": [
     "webxr_ar_camera_access",
     "webxr_ar_cones",
@@ -496,7 +501,9 @@
     "webxr_xr_paint",
     "webxr_xr_sculpt"
   ],
-  "games": ["games_fps"],
+  "games": [
+    "games_fps"
+  ],
   "physics": [
     "physics_ammo_break",
     "physics_ammo_cloth",
@@ -534,9 +541,27 @@
     "misc_exporter_ktx2",
     "misc_raycaster_helper"
   ],
-  "css2d": ["css2d_label"],
-  "css3d": ["css3d_molecules", "css3d_orthographic", "css3d_periodictable", "css3d_sandbox", "css3d_sprites", "css3d_youtube"],
-  "svg": ["svg_lines", "svg_sandbox"],
-  "tests": ["webgl_furnace_test", "webgl_pmrem_test", "misc_uv_tests"],
-  "custom": ["custom/sphere_movement/webgl_buffergeometry_sphere_movement"]
+  "css2d": [
+    "css2d_label"
+  ],
+  "css3d": [
+    "css3d_molecules",
+    "css3d_orthographic",
+    "css3d_periodictable",
+    "css3d_sandbox",
+    "css3d_sprites",
+    "css3d_youtube"
+  ],
+  "svg": [
+    "svg_lines",
+    "svg_sandbox"
+  ],
+  "tests": [
+    "webgl_furnace_test",
+    "webgl_pmrem_test",
+    "misc_uv_tests"
+  ],
+  "custom": [
+    "custom/sphere_movement/webgl_buffergeometry_sphere_movement"
+  ]
 }
