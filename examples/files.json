@@ -563,6 +563,7 @@
   ],
   "custom": [
     "custom/base_cube/cube",
-    "custom/sphere_movement/webgl_buffergeometry_sphere_movement"
+    "custom/sphere_movement/webgl_buffergeometry_sphere_movement",
+    "custom/webgl_reversed_depth_buffer_comparison/webgl_reversed_depth_buffer_comparison"
   ]
 }

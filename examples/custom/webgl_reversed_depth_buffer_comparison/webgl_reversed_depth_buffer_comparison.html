@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>反向深度缓冲区对比演示</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background: #000;
+        color: #fff;
+        font-family: Arial, sans-serif;
+        overflow: hidden;
+      }
+
+      #info {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 1000;
+        background: rgba(0, 0, 0, 0.8);
+        padding: 15px;
+        border-radius: 5px;
+        max-width: 300px;
+        font-size: 14px;
+        line-height: 1.4;
+      }
+
+      #container {
+        display: flex;
+        width: 100%;
+        height: 100vh;
+      }
+
+      .renderer-container {
+        flex: 1;
+        position: relative;
+        border-right: 1px solid #333;
+      }
+
+      .renderer-container:last-child {
+        border-right: none;
+      }
+
+      .label {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 100;
+        background: rgba(0, 0, 0, 0.7);
+        padding: 8px 12px;
+        border-radius: 3px;
+        font-size: 12px;
+        font-weight: bold;
+      }
+
+      .stats {
+        position: absolute;
+        bottom: 10px;
+        left: 10px;
+        z-index: 100;
+        background: rgba(0, 0, 0, 0.7);
+        padding: 5px 8px;
+        border-radius: 3px;
+        font-size: 11px;
+      }
+
+      #controls {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 1000;
+        background: rgba(0, 0, 0, 0.8);
+        padding: 10px;
+        border-radius: 5px;
+      }
+
+      .control-group {
+        margin-bottom: 10px;
+      }
+
+      .control-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-size: 12px;
+      }
+
+      .control-group input[type="range"] {
+        width: 150px;
+      }
+
+      .control-group button {
+        background: #333;
+        color: #fff;
+        border: 1px solid #555;
+        padding: 5px 10px;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 11px;
+      }
+
+      .control-group button:hover {
+        background: #555;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="info">
+      <h3>反向深度缓冲区对比演示</h3>
+      <p>此演示展示了三种不同深度缓冲区技术的效果对比：</p>
+      <ul>
+        <li><strong>标准深度缓冲区</strong>：传统深度测试，在远距离会出现Z-fighting</li>
+        <li><strong>对数深度缓冲区</strong>：使用对数分布改善精度，但性能较慢</li>
+        <li><strong>反向深度缓冲区</strong>：最佳的精度和性能平衡</li>
+      </ul>
+      <p>观察远距离的红绿平面重叠区域，可以看到不同技术对Z-fighting的处理效果。</p>
+    </div>
+
+    <div id="controls">
+      <div class="control-group">
+        <label>相机距离: <span id="distanceValue">12</span></label>
+        <input type="range" id="cameraDistance" min="5" max="50" value="12" step="1" />
+      </div>
+      <div class="control-group">
+        <label>旋转速度: <span id="speedValue">1.0</span></label>
+        <input type="range" id="rotationSpeed" min="0" max="3" value="1" step="0.1" />
+      </div>
+      <div class="control-group">
+        <button id="pauseBtn">暂停动画</button>
+        <button id="resetBtn">重置视角</button>
+      </div>
+      <div class="control-group">
+        <button id="nearSceneBtn">近距离场景</button>
+        <button id="farSceneBtn">远距离场景</button>
+      </div>
+      <div class="control-group">
+        <label>场景类型: <span id="sceneType">远距离</span></label>
+      </div>
+    </div>
+
+    <div id="container">
+      <div id="container_normal" class="renderer-container">
+        <div class="label">标准深度缓冲区</div>
+        <div class="stats" id="stats_normal">FPS: --</div>
+      </div>
+      <div id="container_logarithmic" class="renderer-container">
+        <div class="label">对数深度缓冲区</div>
+        <div class="stats" id="stats_log">FPS: --</div>
+      </div>
+      <div id="container_reverse" class="renderer-container">
+        <div class="label">反向深度缓冲区</div>
+        <div class="stats" id="stats_reverse">FPS: --</div>
+      </div>
+    </div>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "../../../build/three.module.js",
+          "three/addons/": "../../jsm/"
+        }
+      }
+    </script>
+    <script type="module">
+      import * as THREE from "three";
+      import Stats from "three/addons/libs/stats.module.js";
+
+      let stats, camera, reversedCamera, scene;
+      let normalRenderer, logarithmicRenderer, reverseRenderer;
+      const meshes = [];
+      let animationId;
+      let isPaused = false;
+      let rotationSpeed = 1.0;
+
+      // 性能监控
+      const normalStats = new Stats();
+      const logStats = new Stats();
+      const reverseStats = new Stats();
+
+      init();
+      animate();
+
+      function init() {
+        // 创建相机 - 使用大的深度范围来突出深度精度问题
+        camera = new THREE.PerspectiveCamera(
+          72,
+          window.innerWidth / 3 / window.innerHeight,
+          5, // 近平面
+          9999 // 远平面 - 大范围
+        );
+        camera.position.z = 12;
+
+        // 为反向深度缓冲区创建独立的相机
+        reversedCamera = camera.clone();
+
+        // 创建场景
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x111111);
+
+        // 创建测试几何体
+        createTestGeometry();
+
+        // 创建三个不同的渲染器进行对比
+        setupRenderers();
+
+        // 设置控制器
+        setupControls();
+
+        // 窗口大小调整处理
+        window.addEventListener("resize", onWindowResize);
+      }
+
+      function createTestGeometry() {
+        const xCount = 1;
+        const yCount = 5;
+        const numInstances = xCount * yCount;
+
+        // 创建两个非常接近的平面来测试Z-fighting
+        const d = 0.0001; // 平面间的极小距离
+        const o = 0.5; // 偏移量
+
+        const positions = new Float32Array([
+          // 红色平面
+          -1 - o,
+          -1,
+          d,
+          1 - o,
+          -1,
+          d,
+          -1 - o,
+          1,
+          d,
+          1 - o,
+          -1,
+          d,
+          1 - o,
+          1,
+          d,
+          -1 - o,
+          1,
+          d,
+          // 绿色平面
+          -1 + o,
+          -1,
+          -d,
+          1 + o,
+          -1,
+          -d,
+          -1 + o,
+          1,
+          -d,
+          1 + o,
+          -1,
+          -d,
+          1 + o,
+          1,
+          -d,
+          -1 + o,
+          1,
+          -d,
+        ]);
+
+        const colors = new Float32Array([
+          // 红色平面
+          1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0,
+          // 绿色平面
+          0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0,
+        ]);
+
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+
+        const material = new THREE.MeshBasicMaterial({
+          vertexColors: true,
+          transparent: true,
+          opacity: 0.8,
+        });
+
+        // 创建多个实例，放置在不同的深度
+        for (let i = 0; i < numInstances; i++) {
+          const mesh = new THREE.Mesh(geometry, material);
+          meshes.push(mesh);
+          scene.add(mesh);
+        }
+
+        // 定位网格到不同的深度位置
+        let i = 0;
+        for (let x = 0; x < xCount; x++) {
+          for (let y = 0; y < yCount; y++) {
+            const z = -800 * i; // 递增的深度
+            const s = 1 + 50 * i; // 递增的缩放
+
+            const mesh = meshes[i];
+            mesh.position.set(x - xCount / 2 + 0.5, (4.0 - 0.2 * z) * (y - yCount / 2 + 1.0), z);
+            mesh.scale.setScalar(s);
+            i++;
+          }
+        }
+
+        // 添加一些参考物体
+        addReferenceObjects();
+      }
+
+      function addReferenceObjects() {
+        // 添加网格地面作为参考
+        const gridHelper = new THREE.GridHelper(2000, 20, 0x444444, 0x222222);
+        gridHelper.position.y = -5;
+        scene.add(gridHelper);
+
+        // 添加坐标轴
+        const axesHelper = new THREE.AxesHelper(100);
+        scene.add(axesHelper);
+      }
+
+      function setupRenderers() {
+        const width = window.innerWidth / 3;
+        const height = window.innerHeight;
+
+        // 1. 标准深度缓冲区渲染器
+        const normalContainer = document.getElementById("container_normal");
+        normalRenderer = new THREE.WebGLRenderer({ antialias: true });
+        normalRenderer.setPixelRatio(window.devicePixelRatio);
+        normalRenderer.setSize(width, height);
+        normalRenderer.setClearColor(0x111111);
+        normalContainer.appendChild(normalRenderer.domElement);
+
+        // 添加性能监控
+        normalStats.showPanel(0); // FPS
+        normalStats.dom.style.position = "absolute";
+        normalStats.dom.style.bottom = "40px";
+        normalStats.dom.style.left = "10px";
+        normalContainer.appendChild(normalStats.dom);
+
+        // 2. 对数深度缓冲区渲染器
+        const logarithmicContainer = document.getElementById("container_logarithmic");
+        logarithmicRenderer = new THREE.WebGLRenderer({
+          logarithmicDepthBuffer: true,
+          antialias: true,
+        });
+        logarithmicRenderer.setPixelRatio(window.devicePixelRatio);
+        logarithmicRenderer.setSize(width, height);
+        logarithmicRenderer.setClearColor(0x111111);
+        logarithmicContainer.appendChild(logarithmicRenderer.domElement);
+
+        // 添加性能监控
+        logStats.showPanel(0);
+        logStats.dom.style.position = "absolute";
+        logStats.dom.style.bottom = "40px";
+        logStats.dom.style.left = "10px";
+        logarithmicContainer.appendChild(logStats.dom);
+
+        // 3. 反向深度缓冲区渲染器
+        const reverseContainer = document.getElementById("container_reverse");
+        reverseRenderer = new THREE.WebGLRenderer({
+          reversedDepthBuffer: true,
+          antialias: true,
+        });
+        reverseRenderer.setPixelRatio(window.devicePixelRatio);
+        reverseRenderer.setSize(width, height);
+        reverseRenderer.setClearColor(0x111111);
+        reverseContainer.appendChild(reverseRenderer.domElement);
+
+        // 添加性能监控
+        reverseStats.showPanel(0);
+        reverseStats.dom.style.position = "absolute";
+        reverseStats.dom.style.bottom = "40px";
+        reverseStats.dom.style.left = "10px";
+        reverseContainer.appendChild(reverseStats.dom);
+
+        // 检查反向深度缓冲区是否成功启用
+        if (reverseRenderer.capabilities.reversedDepthBuffer) {
+          console.log("✅ 反向深度缓冲区已启用");
+          updateStats("reverse", "支持反向深度");
+        } else {
+          console.warn("❌ 反向深度缓冲区不支持或未启用");
+          updateStats("reverse", "不支持反向深度");
+        }
+
+        // 检查对数深度缓冲区
+        if (logarithmicRenderer.capabilities.logarithmicDepthBuffer) {
+          console.log("✅ 对数深度缓冲区已启用");
+          updateStats("log", "支持对数深度");
+        } else {
+          console.warn("❌ 对数深度缓冲区不支持");
+          updateStats("log", "不支持对数深度");
+        }
+      }
+
+      function setupControls() {
+        const distanceSlider = document.getElementById("cameraDistance");
+        const speedSlider = document.getElementById("rotationSpeed");
+        const pauseBtn = document.getElementById("pauseBtn");
+        const resetBtn = document.getElementById("resetBtn");
+
+        // 相机距离控制
+        distanceSlider.addEventListener("input", (e) => {
+          const distance = parseFloat(e.target.value);
+          camera.position.z = distance;
+          reversedCamera.position.z = distance;
+          document.getElementById("distanceValue").textContent = distance;
+        });
+
+        // 旋转速度控制
+        speedSlider.addEventListener("input", (e) => {
+          rotationSpeed = parseFloat(e.target.value);
+          document.getElementById("speedValue").textContent = rotationSpeed.toFixed(1);
+        });
+
+        // 暂停/继续按钮
+        pauseBtn.addEventListener("click", () => {
+          isPaused = !isPaused;
+          pauseBtn.textContent = isPaused ? "继续动画" : "暂停动画";
+          if (!isPaused) {
+            animate();
+          }
+        });
+
+        // 重置按钮
+        resetBtn.addEventListener("click", () => {
+          camera.position.set(0, 0, 12);
+          reversedCamera.position.set(0, 0, 12);
+          camera.rotation.set(0, 0, 0);
+          reversedCamera.rotation.set(0, 0, 0);
+          distanceSlider.value = 12;
+          speedSlider.value = 1;
+          rotationSpeed = 1.0;
+          document.getElementById("distanceValue").textContent = "12";
+          document.getElementById("speedValue").textContent = "1.0";
+        });
+      }
+
+      function updateStats(type, message) {
+        const statsElement = document.getElementById(`stats_${type}`);
+        if (statsElement) {
+          statsElement.textContent = message;
+        }
+      }
+
+      function animate() {
+        if (isPaused) return;
+
+        animationId = requestAnimationFrame(animate);
+
+        const now = performance.now() / 1000;
+
+        // 旋转所有网格以便观察深度效果
+        for (let i = 0; i < meshes.length; i++) {
+          const angle = THREE.MathUtils.degToRad(30 * rotationSpeed);
+          const axis = new THREE.Vector3(Math.sin(now * rotationSpeed), Math.cos(now * rotationSpeed), 0);
+          meshes[i].quaternion.setFromAxisAngle(axis, angle);
+        }
+
+        render();
+      }
+
+      function render() {
+        // 更新性能监控
+        normalStats.begin();
+        normalRenderer.render(scene, camera);
+        normalStats.end();
+
+        logStats.begin();
+        logarithmicRenderer.render(scene, camera);
+        logStats.end();
+
+        reverseStats.begin();
+        reverseRenderer.render(scene, reversedCamera);
+        reverseStats.end();
+      }
+
+      function onWindowResize() {
+        const width = window.innerWidth / 3;
+        const height = window.innerHeight;
+
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+
+        reversedCamera.aspect = width / height;
+        reversedCamera.updateProjectionMatrix();
+
+        normalRenderer.setSize(width, height);
+        logarithmicRenderer.setSize(width, height);
+        reverseRenderer.setSize(width, height);
+      }
+
+      // 添加键盘控制
+      document.addEventListener("keydown", (event) => {
+        const moveSpeed = 2;
+        switch (event.code) {
+          case "KeyW":
+            camera.position.z -= moveSpeed;
+            reversedCamera.position.z -= moveSpeed;
+            break;
+          case "KeyS":
+            camera.position.z += moveSpeed;
+            reversedCamera.position.z += moveSpeed;
+            break;
+          case "KeyA":
+            camera.position.x -= moveSpeed;
+            reversedCamera.position.x -= moveSpeed;
+            break;
+          case "KeyD":
+            camera.position.x += moveSpeed;
+            reversedCamera.position.x += moveSpeed;
+            break;
+          case "KeyQ":
+            camera.position.y += moveSpeed;
+            reversedCamera.position.y += moveSpeed;
+            break;
+          case "KeyE":
+            camera.position.y -= moveSpeed;
+            reversedCamera.position.y -= moveSpeed;
+            break;
+          case "Space":
+            event.preventDefault();
+            document.getElementById("pauseBtn").click();
+            break;
+        }
+
+        // 更新距离滑块
+        const distance = Math.round(camera.position.z);
+        if (distance >= 5 && distance <= 50) {
+          document.getElementById("cameraDistance").value = distance;
+          document.getElementById("distanceValue").textContent = distance;
+        }
+      });
+
+      // 添加鼠标控制提示
+      console.log("控制说明:");
+      console.log("WASD - 移动相机");
+      console.log("QE - 上下移动");
+      console.log("空格 - 暂停/继续动画");
+      console.log("使用右上角的控制面板调整参数");
+    </script>
+  </body>
+</html>

@@ -1,23 +1,75 @@
-export const REVISION = '180dev';
+/**
+ * Three.js 常量定义文件
+ *
+ * 这个文件包含了 Three.js 中使用的所有常量定义，包括：
+ * - 版本信息
+ * - 鼠标和触摸交互常量
+ * - 渲染相关常量（面剔除、阴影、混合等）
+ * - 纹理相关常量（格式、类型、过滤等）
+ * - 动画相关常量
+ * - WebGL 相关常量
+ * - 颜色空间常量
+ *
+ * 这些常量确保了整个库的一致性和类型安全。
+ */
 
 /**
- * Represents mouse buttons and interaction types in context of controls.
+ * Three.js 版本号
+ *
+ * 当前 Three.js 库的版本标识符。'dev' 表示开发版本。
+ *
+ * @type {string}
+ * @constant
+ */
+export const REVISION = "180dev";
+
+// ========================================
+// 输入设备交互常量
+// ========================================
+
+/**
+ * 鼠标按键和控制器交互类型常量
+ *
+ * 定义了鼠标按键的标识符和在控制器中对应的交互类型。
+ * 这些常量用于统一处理鼠标输入和相机控制。
  *
  * @type {ConstantsMouse}
  * @constant
  */
-export const MOUSE = { LEFT: 0, MIDDLE: 1, RIGHT: 2, ROTATE: 0, DOLLY: 1, PAN: 2 };
+export const MOUSE = {
+  LEFT: 0, // 鼠标左键 / 旋转操作
+  MIDDLE: 1, // 鼠标中键 / 缩放操作
+  RIGHT: 2, // 鼠标右键 / 平移操作
+  ROTATE: 0, // 旋转交互（对应左键）
+  DOLLY: 1, // 缩放交互（对应中键）
+  PAN: 2, // 平移交互（对应右键）
+};
 
 /**
- * Represents touch interaction types in context of controls.
+ * 触摸交互类型常量
+ *
+ * 定义了触摸设备上的各种交互手势类型。
+ * 用于在触摸控制器中识别和处理不同的手势。
  *
  * @type {ConstantsTouch}
  * @constant
  */
-export const TOUCH = { ROTATE: 0, PAN: 1, DOLLY_PAN: 2, DOLLY_ROTATE: 3 };
+export const TOUCH = {
+  ROTATE: 0, // 单指旋转
+  PAN: 1, // 单指平移
+  DOLLY_PAN: 2, // 双指缩放+平移
+  DOLLY_ROTATE: 3, // 双指缩放+旋转
+};
+
+// ========================================
+// 面剔除常量
+// ========================================
 
 /**
- * Disables face culling.
+ * 禁用面剔除
+ *
+ * 不剔除任何面，前面和背面都会被渲染。
+ * 这会增加渲染负担，但对于需要看到物体内部的情况很有用。
  *
  * @type {number}
  * @constant
@@ -25,7 +77,10 @@ export const TOUCH = { ROTATE: 0, PAN: 1, DOLLY_PAN: 2, DOLLY_ROTATE: 3 };
 export const CullFaceNone = 0;
 
 /**
- * Culls back faces.
+ * 剔除背面
+ *
+ * 只渲染前面，剔除背面。这是最常用的设置，
+ * 可以提高渲染性能，因为通常看不到物体的背面。
  *
  * @type {number}
  * @constant
@@ -33,7 +88,10 @@ export const CullFaceNone = 0;
 export const CullFaceBack = 1;
 
 /**
- * Culls front faces.
+ * 剔除前面
+ *
+ * 只渲染背面，剔除前面。
+ * 用于特殊效果，如渲染物体的内部。
  *
  * @type {number}
  * @constant
@@ -41,15 +99,25 @@ export const CullFaceBack = 1;
 export const CullFaceFront = 2;
 
 /**
- * Culls both front and back faces.
+ * 剔除前面和背面
+ *
+ * 剔除所有面，实际上不会渲染任何几何体。
+ * 这个设置很少使用，主要用于调试目的。
  *
  * @type {number}
  * @constant
  */
 export const CullFaceFrontBack = 3;
 
+// ========================================
+// 阴影贴图类型常量
+// ========================================
+
 /**
- * Gives unfiltered shadow maps - fastest, but lowest quality.
+ * 基础阴影贴图
+ *
+ * 不进行过滤的阴影贴图 - 速度最快，但质量最低。
+ * 会产生锯齿状的阴影边缘，适用于性能要求高的场景。
  *
  * @type {number}
  * @constant
@@ -57,7 +125,10 @@ export const CullFaceFrontBack = 3;
 export const BasicShadowMap = 0;
 
 /**
- * Filters shadow maps using the Percentage-Closer Filtering (PCF) algorithm.
+ * PCF 阴影贴图
+ *
+ * 使用百分比接近过滤（PCF）算法过滤阴影贴图。
+ * 提供较好的阴影质量，边缘更平滑，是常用的阴影类型。
  *
  * @type {number}
  * @constant
@@ -65,8 +136,10 @@ export const BasicShadowMap = 0;
 export const PCFShadowMap = 1;
 
 /**
- * Filters shadow maps using the Percentage-Closer Filtering (PCF) algorithm with
- * better soft shadows especially when using low-resolution shadow maps.
+ * PCF 软阴影贴图
+ *
+ * 使用改进的 PCF 算法，提供更好的软阴影效果。
+ * 特别适用于低分辨率阴影贴图，能产生更自然的阴影边缘。
  *
  * @type {number}
  * @constant
@@ -74,16 +147,25 @@ export const PCFShadowMap = 1;
 export const PCFSoftShadowMap = 2;
 
 /**
- * Filters shadow maps using the Variance Shadow Map (VSM) algorithm.
- * When using VSMShadowMap all shadow receivers will also cast shadows.
+ * VSM 阴影贴图
+ *
+ * 使用方差阴影贴图（VSM）算法过滤阴影贴图。
+ * 注意：使用 VSM 时，所有阴影接收者也会投射阴影。
  *
  * @type {number}
  * @constant
  */
 export const VSMShadowMap = 3;
 
+// ========================================
+// 材质面渲染常量
+// ========================================
+
 /**
- * Only front faces are rendered.
+ * 只渲染前面
+ *
+ * 只渲染几何体的前面（面向相机的面）。
+ * 这是默认设置，适用于大多数实体物体。
  *
  * @type {number}
  * @constant
@@ -91,7 +173,10 @@ export const VSMShadowMap = 3;
 export const FrontSide = 0;
 
 /**
- * Only back faces are rendered.
+ * 只渲染背面
+ *
+ * 只渲染几何体的背面（背向相机的面）。
+ * 常用于创建内部视图或特殊效果。
  *
  * @type {number}
  * @constant
@@ -99,16 +184,25 @@ export const FrontSide = 0;
 export const BackSide = 1;
 
 /**
- * Both front and back faces are rendered.
+ * 渲染双面
+ *
+ * 同时渲染前面和背面。
+ * 用于薄片状物体（如纸张、叶子）或需要看到内部的物体。
  *
  * @type {number}
  * @constant
  */
 export const DoubleSide = 2;
 
+// ========================================
+// 混合模式常量
+// ========================================
+
 /**
- * No blending is performed which effectively disables
- * alpha transparency.
+ * 无混合
+ *
+ * 不执行混合，实际上禁用了 Alpha 透明度。
+ * 新像素直接覆盖原有像素，性能最高。
  *
  * @type {number}
  * @constant
@@ -116,7 +210,10 @@ export const DoubleSide = 2;
 export const NoBlending = 0;
 
 /**
- * The default blending.
+ * 正常混合
+ *
+ * 默认的混合模式，支持标准的 Alpha 透明度。
+ * 公式：result = src * srcAlpha + dst * (1 - srcAlpha)
  *
  * @type {number}
  * @constant
@@ -124,7 +221,11 @@ export const NoBlending = 0;
 export const NormalBlending = 1;
 
 /**
- * Represents additive blending.
+ * 加法混合
+ *
+ * 将源颜色和目标颜色相加。
+ * 公式：result = src + dst
+ * 常用于发光效果、粒子系统等。
  *
  * @type {number}
  * @constant
@@ -132,7 +233,11 @@ export const NormalBlending = 1;
 export const AdditiveBlending = 2;
 
 /**
- * Represents subtractive blending.
+ * 减法混合
+ *
+ * 从目标颜色中减去源颜色。
+ * 公式：result = dst - src
+ * 用于创建阴影或暗化效果。
  *
  * @type {number}
  * @constant
@@ -140,7 +245,11 @@ export const AdditiveBlending = 2;
 export const SubtractiveBlending = 3;
 
 /**
- * Represents multiply blending.
+ * 乘法混合
+ *
+ * 将源颜色和目标颜色相乘。
+ * 公式：result = src * dst
+ * 常用于阴影、滤镜效果等。
  *
  * @type {number}
  * @constant
@@ -148,15 +257,26 @@ export const SubtractiveBlending = 3;
 export const MultiplyBlending = 4;
 
 /**
- * Represents custom blending.
+ * 自定义混合
+ *
+ * 允许用户自定义混合方程式和因子。
+ * 提供最大的灵活性，可以创建复杂的混合效果。
  *
  * @type {number}
  * @constant
  */
 export const CustomBlending = 5;
 
+// ========================================
+// 混合方程式常量
+// ========================================
+
 /**
- * A `source + destination` blending equation.
+ * 加法混合方程式
+ *
+ * 源颜色 + 目标颜色的混合方程式。
+ * 公式：result = source + destination
+ * 这是最常用的混合方程式。
  *
  * @type {number}
  * @constant
@@ -164,7 +284,11 @@ export const CustomBlending = 5;
 export const AddEquation = 100;
 
 /**
- * A `source - destination` blending equation.
+ * 减法混合方程式
+ *
+ * 源颜色 - 目标颜色的混合方程式。
+ * 公式：result = source - destination
+ * 用于创建减法效果。
  *
  * @type {number}
  * @constant
@@ -172,7 +296,11 @@ export const AddEquation = 100;
 export const SubtractEquation = 101;
 
 /**
- * A `destination - source` blending equation.
+ * 反向减法混合方程式
+ *
+ * 目标颜色 - 源颜色的混合方程式。
+ * 公式：result = destination - source
+ * 与减法方程式相反的效果。
  *
  * @type {number}
  * @constant
@@ -180,7 +308,11 @@ export const SubtractEquation = 101;
 export const ReverseSubtractEquation = 102;
 
 /**
- * A blend equation that uses the minimum of source and destination.
+ * 最小值混合方程式
+ *
+ * 取源颜色和目标颜色的最小值。
+ * 公式：result = min(source, destination)
+ * 用于创建暗化效果。
  *
  * @type {number}
  * @constant
@@ -188,15 +320,26 @@ export const ReverseSubtractEquation = 102;
 export const MinEquation = 103;
 
 /**
- * A blend equation that uses the maximum of source and destination.
+ * 最大值混合方程式
+ *
+ * 取源颜色和目标颜色的最大值。
+ * 公式：result = max(source, destination)
+ * 用于创建亮化效果。
  *
  * @type {number}
  * @constant
  */
 export const MaxEquation = 104;
 
+// ========================================
+// 混合因子常量
+// ========================================
+
 /**
- * Multiplies all colors by `0`.
+ * 零因子
+ *
+ * 将所有颜色乘以 0，结果为黑色。
+ * 公式：color * 0 = (0, 0, 0, 0)
  *
  * @type {number}
  * @constant
@@ -204,7 +347,10 @@ export const MaxEquation = 104;
 export const ZeroFactor = 200;
 
 /**
- * Multiplies all colors by `1`.
+ * 一因子
+ *
+ * 将所有颜色乘以 1，保持原色不变。
+ * 公式：color * 1 = color
  *
  * @type {number}
  * @constant
@@ -212,7 +358,10 @@ export const ZeroFactor = 200;
 export const OneFactor = 201;
 
 /**
- * Multiplies all colors by the source colors.
+ * 源颜色因子
+ *
+ * 将所有颜色乘以源颜色。
+ * 公式：color * srcColor
  *
  * @type {number}
  * @constant
@@ -220,7 +369,10 @@ export const OneFactor = 201;
 export const SrcColorFactor = 202;
 
 /**
- * Multiplies all colors by `1` minus each source color.
+ * 一减源颜色因子
+ *
+ * 将所有颜色乘以 (1 - 源颜色)。
+ * 公式：color * (1 - srcColor)
  *
  * @type {number}
  * @constant
@@ -228,7 +380,11 @@ export const SrcColorFactor = 202;
 export const OneMinusSrcColorFactor = 203;
 
 /**
- * Multiplies all colors by the source alpha value.
+ * 源 Alpha 因子
+ *
+ * 将所有颜色乘以源 Alpha 值。
+ * 公式：color * srcAlpha
+ * 这是最常用的透明度混合因子。
  *
  * @type {number}
  * @constant
@@ -236,7 +392,11 @@ export const OneMinusSrcColorFactor = 203;
 export const SrcAlphaFactor = 204;
 
 /**
- * Multiplies all colors by 1 minus the source alpha value.
+ * 一减源 Alpha 因子
+ *
+ * 将所有颜色乘以 (1 - 源 Alpha 值)。
+ * 公式：color * (1 - srcAlpha)
+ * 常与 SrcAlphaFactor 配合使用。
  *
  * @type {number}
  * @constant
@@ -244,7 +404,10 @@ export const SrcAlphaFactor = 204;
 export const OneMinusSrcAlphaFactor = 205;
 
 /**
- * Multiplies all colors by the destination alpha value.
+ * 目标 Alpha 因子
+ *
+ * 将所有颜色乘以目标 Alpha 值。
+ * 公式：color * dstAlpha
  *
  * @type {number}
  * @constant
@@ -252,7 +415,10 @@ export const OneMinusSrcAlphaFactor = 205;
 export const DstAlphaFactor = 206;
 
 /**
- * Multiplies all colors by `1` minus the destination alpha value.
+ * 一减目标 Alpha 因子
+ *
+ * 将所有颜色乘以 (1 - 目标 Alpha 值)。
+ * 公式：color * (1 - dstAlpha)
  *
  * @type {number}
  * @constant
@@ -260,7 +426,11 @@ export const DstAlphaFactor = 206;
 export const OneMinusDstAlphaFactor = 207;
 
 /**
- * Multiplies all colors by the destination color.
+ * 目标颜色因子
+ *
+ * 将所有颜色乘以目标颜色。
+ * 公式：color * dstColor
+ * 常用于乘法混合效果。
  *
  * @type {number}
  * @constant
@@ -268,7 +438,10 @@ export const OneMinusDstAlphaFactor = 207;
 export const DstColorFactor = 208;
 
 /**
- * Multiplies all colors by `1` minus each destination color.
+ * 一减目标颜色因子
+ *
+ * 将所有颜色乘以 (1 - 目标颜色)。
+ * 公式：color * (1 - dstColor)
  *
  * @type {number}
  * @constant
@@ -276,9 +449,11 @@ export const DstColorFactor = 208;
 export const OneMinusDstColorFactor = 209;
 
 /**
- * Multiplies the RGB colors by the smaller of either the source alpha
- * value or the value of `1` minus the destination alpha value. The alpha
- * value is multiplied by `1`.
+ * 源 Alpha 饱和因子
+ *
+ * RGB 颜色乘以源 Alpha 值和 (1 - 目标 Alpha 值) 中的较小值。
+ * Alpha 值乘以 1。
+ * 公式：RGB * min(srcAlpha, 1 - dstAlpha), Alpha * 1
  *
  * @type {number}
  * @constant
@@ -286,7 +461,11 @@ export const OneMinusDstColorFactor = 209;
 export const SrcAlphaSaturateFactor = 210;
 
 /**
- * Multiplies all colors by a constant color.
+ * 常量颜色因子
+ *
+ * 将所有颜色乘以一个常量颜色。
+ * 公式：color * constantColor
+ * 常量颜色通过 gl.blendColor() 设置。
  *
  * @type {number}
  * @constant
@@ -294,7 +473,10 @@ export const SrcAlphaSaturateFactor = 210;
 export const ConstantColorFactor = 211;
 
 /**
- * Multiplies all colors by `1` minus a constant color.
+ * 一减常量颜色因子
+ *
+ * 将所有颜色乘以 (1 - 常量颜色)。
+ * 公式：color * (1 - constantColor)
  *
  * @type {number}
  * @constant
@@ -302,7 +484,11 @@ export const ConstantColorFactor = 211;
 export const OneMinusConstantColorFactor = 212;
 
 /**
- * Multiplies all colors by a constant alpha value.
+ * 常量 Alpha 因子
+ *
+ * 将所有颜色乘以一个常量 Alpha 值。
+ * 公式：color * constantAlpha
+ * 常量 Alpha 通过 gl.blendColor() 设置。
  *
  * @type {number}
  * @constant
@@ -310,15 +496,25 @@ export const OneMinusConstantColorFactor = 212;
 export const ConstantAlphaFactor = 213;
 
 /**
- * Multiplies all colors by 1 minus a constant alpha value.
+ * 一减常量 Alpha 因子
+ *
+ * 将所有颜色乘以 (1 - 常量 Alpha 值)。
+ * 公式：color * (1 - constantAlpha)
  *
  * @type {number}
  * @constant
  */
 export const OneMinusConstantAlphaFactor = 214;
 
+// ========================================
+// 深度测试函数常量
+// ========================================
+
 /**
- * Never pass.
+ * 从不通过深度测试
+ *
+ * 深度测试永远不会通过，像素不会被绘制。
+ * 用于完全禁用某些物体的渲染。
  *
  * @type {number}
  * @constant
@@ -326,7 +522,10 @@ export const OneMinusConstantAlphaFactor = 214;
 export const NeverDepth = 0;
 
 /**
- * Always pass.
+ * 总是通过深度测试
+ *
+ * 深度测试总是通过，像素总是被绘制。
+ * 相当于禁用深度测试，但仍会写入深度缓冲区。
  *
  * @type {number}
  * @constant
@@ -334,7 +533,10 @@ export const NeverDepth = 0;
 export const AlwaysDepth = 1;
 
 /**
- * Pass if the incoming value is less than the depth buffer value.
+ * 小于时通过深度测试
+ *
+ * 当新像素的深度值小于深度缓冲区中的值时通过。
+ * 用于渲染更近的物体。
  *
  * @type {number}
  * @constant
@@ -342,7 +544,10 @@ export const AlwaysDepth = 1;
 export const LessDepth = 2;
 
 /**
- * Pass if the incoming value is less than or equal to the depth buffer value.
+ * 小于等于时通过深度测试
+ *
+ * 当新像素的深度值小于或等于深度缓冲区中的值时通过。
+ * 这是最常用的深度测试函数，Three.js 的默认设置。
  *
  * @type {number}
  * @constant
@@ -350,7 +555,10 @@ export const LessDepth = 2;
 export const LessEqualDepth = 3;
 
 /**
- * Pass if the incoming value equals the depth buffer value.
+ * 等于时通过深度测试
+ *
+ * 只有当新像素的深度值等于深度缓冲区中的值时才通过。
+ * 用于特殊的深度匹配效果。
  *
  * @type {number}
  * @constant
@@ -358,7 +566,10 @@ export const LessEqualDepth = 3;
 export const EqualDepth = 4;
 
 /**
- * Pass if the incoming value is greater than or equal to the depth buffer value.
+ * 大于等于时通过深度测试
+ *
+ * 当新像素的深度值大于或等于深度缓冲区中的值时通过。
+ * 用于反向深度测试或特殊效果。
  *
  * @type {number}
  * @constant
@@ -366,7 +577,10 @@ export const EqualDepth = 4;
 export const GreaterEqualDepth = 5;
 
 /**
- * Pass if the incoming value is greater than the depth buffer value.
+ * 大于时通过深度测试
+ *
+ * 当新像素的深度值大于深度缓冲区中的值时通过。
+ * 用于渲染更远的物体或特殊效果。
  *
  * @type {number}
  * @constant
@@ -374,15 +588,26 @@ export const GreaterEqualDepth = 5;
 export const GreaterDepth = 6;
 
 /**
- * Pass if the incoming value is not equal to the depth buffer value.
+ * 不等于时通过深度测试
+ *
+ * 当新像素的深度值不等于深度缓冲区中的值时通过。
+ * 用于创建特殊的深度效果。
  *
  * @type {number}
  * @constant
  */
 export const NotEqualDepth = 7;
 
+// ========================================
+// 环境贴图操作常量
+// ========================================
+
 /**
- * Multiplies the environment map color with the surface color.
+ * 乘法操作
+ *
+ * 将环境贴图颜色与表面颜色相乘。
+ * 公式：result = envMapColor * surfaceColor
+ * 产生较暗的效果，常用于环境遮蔽。
  *
  * @type {number}
  * @constant
@@ -390,7 +615,11 @@ export const NotEqualDepth = 7;
 export const MultiplyOperation = 0;
 
 /**
- * Uses reflectivity to blend between the two colors.
+ * 混合操作
+ *
+ * 使用反射率在两种颜色之间进行混合。
+ * 公式：result = mix(surfaceColor, envMapColor, reflectivity)
+ * 这是最常用的环境贴图混合方式。
  *
  * @type {number}
  * @constant
@@ -398,15 +627,26 @@ export const MultiplyOperation = 0;
 export const MixOperation = 1;
 
 /**
- * Adds the two colors.
+ * 加法操作
+ *
+ * 将两种颜色相加。
+ * 公式：result = envMapColor + surfaceColor
+ * 产生较亮的效果，常用于发光材质。
  *
  * @type {number}
  * @constant
  */
 export const AddOperation = 2;
 
+// ========================================
+// 色调映射常量
+// ========================================
+
 /**
- * No tone mapping is applied.
+ * 无色调映射
+ *
+ * 不应用任何色调映射，保持原始的 HDR 颜色值。
+ * 适用于 LDR 内容或不需要色调映射的场景。
  *
  * @type {number}
  * @constant
@@ -414,7 +654,10 @@ export const AddOperation = 2;
 export const NoToneMapping = 0;
 
 /**
- * Linear tone mapping.
+ * 线性色调映射
+ *
+ * 简单的线性色调映射，直接缩放颜色值。
+ * 公式：color = color * exposure
  *
  * @type {number}
  * @constant
@@ -422,7 +665,11 @@ export const NoToneMapping = 0;
 export const LinearToneMapping = 1;
 
 /**
- * Reinhard tone mapping.
+ * Reinhard 色调映射
+ *
+ * 经典的 Reinhard 色调映射算法。
+ * 公式：color = color / (1 + color)
+ * 提供平滑的高光压缩。
  *
  * @type {number}
  * @constant
@@ -430,7 +677,10 @@ export const LinearToneMapping = 1;
 export const ReinhardToneMapping = 2;
 
 /**
- * Cineon tone mapping.
+ * Cineon 色调映射
+ *
+ * 基于 Cineon 胶片响应曲线的色调映射。
+ * 模拟传统胶片的色彩响应特性。
  *
  * @type {number}
  * @constant
@@ -438,7 +688,10 @@ export const ReinhardToneMapping = 2;
 export const CineonToneMapping = 3;
 
 /**
- * ACES Filmic tone mapping.
+ * ACES 电影级色调映射
+ *
+ * 基于 ACES（Academy Color Encoding System）的色调映射。
+ * 广泛用于电影工业，提供专业级的色彩管理。
  *
  * @type {number}
  * @constant
@@ -446,9 +699,10 @@ export const CineonToneMapping = 3;
 export const ACESFilmicToneMapping = 4;
 
 /**
- * Custom tone mapping.
+ * 自定义色调映射
  *
- * Expects a custom implementation by modifying shader code of the material's fragment shader.
+ * 允许用户通过修改材质的片段着色器代码来实现自定义色调映射。
+ * 需要用户自己实现色调映射算法。
  *
  * @type {number}
  * @constant
@@ -456,7 +710,10 @@ export const ACESFilmicToneMapping = 4;
 export const CustomToneMapping = 5;
 
 /**
- * AgX tone mapping.
+ * AgX 色调映射
+ *
+ * 现代的 AgX 色调映射算法。
+ * 提供优秀的色彩保真度和平滑的高光处理。
  *
  * @type {number}
  * @constant
@@ -464,34 +721,53 @@ export const CustomToneMapping = 5;
 export const AgXToneMapping = 6;
 
 /**
- * Neutral tone mapping.
+ * 中性色调映射
  *
- * Implementation based on the Khronos 3D Commerce Group standard tone mapping.
+ * 基于 Khronos 3D Commerce Group 标准的中性色调映射。
+ * 提供平衡的色彩表现，适用于商业应用。
  *
  * @type {number}
  * @constant
  */
 export const NeutralToneMapping = 7;
 
+// ========================================
+// 骨骼绑定模式常量
+// ========================================
+
 /**
- * The skinned mesh shares the same world space as the skeleton.
+ * 附着绑定模式
+ *
+ * 蒙皮网格与骨骼共享相同的世界空间。
+ * 网格的变换会直接影响骨骼的世界位置。
+ * 这是最常用的绑定模式。
  *
  * @type {string}
  * @constant
  */
-export const AttachedBindMode = 'attached';
+export const AttachedBindMode = "attached";
 
 /**
- * The skinned mesh does not share the same world space as the skeleton.
- * This is useful when a skeleton is shared across multiple skinned meshes.
+ * 分离绑定模式
+ *
+ * 蒙皮网格与骨骼不共享相同的世界空间。
+ * 当一个骨骼在多个蒙皮网格之间共享时很有用。
+ * 允许独立变换网格而不影响骨骼。
  *
  * @type {string}
  * @constant
  */
-export const DetachedBindMode = 'detached';
+export const DetachedBindMode = "detached";
+
+// ========================================
+// 纹理映射常量
+// ========================================
 
 /**
- * Maps textures using the geometry's UV coordinates.
+ * UV 坐标映射
+ *
+ * 使用几何体的 UV 坐标来映射纹理。
+ * 这是最常用的纹理映射方式。
  *
  * @type {number}
  * @constant
@@ -499,7 +775,10 @@ export const DetachedBindMode = 'detached';
 export const UVMapping = 300;
 
 /**
- * Reflection mapping for cube textures.
+ * 立方体反射映射
+ *
+ * 用于立方体纹理的反射映射。
+ * 常用于环境反射、天空盒等效果。
  *
  * @type {number}
  * @constant
@@ -507,7 +786,10 @@ export const UVMapping = 300;
 export const CubeReflectionMapping = 301;
 
 /**
- * Refraction mapping for cube textures.
+ * 立方体折射映射
+ *
+ * 用于立方体纹理的折射映射。
+ * 用于模拟透明物体的折射效果。
  *
  * @type {number}
  * @constant
@@ -515,7 +797,10 @@ export const CubeReflectionMapping = 301;
 export const CubeRefractionMapping = 302;
 
 /**
- * Reflection mapping for equirectangular textures.
+ * 等距柱状投影反射映射
+ *
+ * 用于等距柱状投影纹理的反射映射。
+ * 常用于 360 度全景环境贴图。
  *
  * @type {number}
  * @constant
@@ -523,7 +808,10 @@ export const CubeRefractionMapping = 302;
 export const EquirectangularReflectionMapping = 303;
 
 /**
- * Refraction mapping for equirectangular textures.
+ * 等距柱状投影折射映射
+ *
+ * 用于等距柱状投影纹理的折射映射。
+ * 用于全景折射效果。
  *
  * @type {number}
  * @constant
@@ -531,15 +819,25 @@ export const EquirectangularReflectionMapping = 303;
 export const EquirectangularRefractionMapping = 304;
 
 /**
- * Reflection mapping for PMREM textures.
+ * PMREM 反射映射
+ *
+ * 用于预过滤的 Mipmap 辐射环境贴图（PMREM）的反射映射。
+ * 提供高质量的环境反射效果。
  *
  * @type {number}
  * @constant
  */
 export const CubeUVReflectionMapping = 306;
 
+// ========================================
+// 纹理包装常量
+// ========================================
+
 /**
- * The texture will simply repeat to infinity.
+ * 重复包装
+ *
+ * 纹理会简单地重复到无穷远。
+ * 当 UV 坐标超出 [0,1] 范围时，纹理会重复平铺。
  *
  * @type {number}
  * @constant
@@ -547,7 +845,10 @@ export const CubeUVReflectionMapping = 306;
 export const RepeatWrapping = 1000;
 
 /**
- * The last pixel of the texture stretches to the edge of the mesh.
+ * 边缘钳制包装
+ *
+ * 纹理的最后一个像素会拉伸到网格的边缘。
+ * 超出 [0,1] 范围的 UV 坐标会使用边缘像素的颜色。
  *
  * @type {number}
  * @constant
@@ -555,16 +856,25 @@ export const RepeatWrapping = 1000;
 export const ClampToEdgeWrapping = 1001;
 
 /**
- * The texture will repeats to infinity, mirroring on each repeat.
+ * 镜像重复包装
+ *
+ * 纹理会重复到无穷远，但每次重复都会镜像翻转。
+ * 创建无缝的镜像平铺效果。
  *
  * @type {number}
  * @constant
  */
 export const MirroredRepeatWrapping = 1002;
 
+// ========================================
+// 纹理过滤常量
+// ========================================
+
 /**
- * Returns the value of the texture element that is nearest (in Manhattan distance)
- * to the specified texture coordinates.
+ * 最近邻过滤
+ *
+ * 返回距离指定纹理坐标最近的纹理元素值（曼哈顿距离）。
+ * 产生像素化效果，适用于像素艺术风格。
  *
  * @type {number}
  * @constant
@@ -572,31 +882,34 @@ export const MirroredRepeatWrapping = 1002;
 export const NearestFilter = 1003;
 
 /**
- * Chooses the mipmap that most closely matches the size of the pixel being textured
- * and uses the `NearestFilter` criterion (the texel nearest to the center of the pixel)
- * to produce a texture value.
+ * 最近邻 Mipmap 最近邻过滤
+ *
+ * 选择最接近被纹理化像素大小的 mipmap，
+ * 并使用最近邻过滤标准产生纹理值。
  *
  * @type {number}
  * @constant
  */
 export const NearestMipmapNearestFilter = 1004;
-export const NearestMipMapNearestFilter = 1004; // legacy
+export const NearestMipMapNearestFilter = 1004; // 遗留命名
 
 /**
- * Chooses the two mipmaps that most closely match the size of the pixel being textured and
- * uses the `NearestFilter` criterion to produce a texture value from each mipmap.
- * The final texture value is a weighted average of those two values.
+ * 最近邻 Mipmap 线性过滤
+ *
+ * 选择两个最接近被纹理化像素大小的 mipmap，
+ * 对每个 mipmap 使用最近邻过滤，最终值是两个值的加权平均。
  *
  * @type {number}
  * @constant
  */
 export const NearestMipmapLinearFilter = 1005;
-export const NearestMipMapLinearFilter = 1005; // legacy
+export const NearestMipMapLinearFilter = 1005; // 遗留命名
 
 /**
- * Returns the weighted average of the four texture elements that are closest to the specified
- * texture coordinates, and can include items wrapped or repeated from other parts of a texture,
- * depending on the values of `wrapS` and `wrapT`, and on the exact mapping.
+ * 线性过滤
+ *
+ * 返回距离指定纹理坐标最近的四个纹理元素的加权平均值。
+ * 产生平滑的纹理效果，这是最常用的过滤方式。
  *
  * @type {number}
  * @constant
@@ -604,29 +917,39 @@ export const NearestMipMapLinearFilter = 1005; // legacy
 export const LinearFilter = 1006;
 
 /**
- * Chooses the mipmap that most closely matches the size of the pixel being textured and uses
- * the `LinearFilter` criterion (a weighted average of the four texels that are closest to the
- * center of the pixel) to produce a texture value.
+ * 线性 Mipmap 最近邻过滤
+ *
+ * 选择最接近被纹理化像素大小的 mipmap，
+ * 并使用线性过滤标准产生纹理值。
  *
  * @type {number}
  * @constant
  */
 export const LinearMipmapNearestFilter = 1007;
-export const LinearMipMapNearestFilter = 1007; // legacy
+export const LinearMipMapNearestFilter = 1007; // 遗留命名
 
 /**
- * Chooses the two mipmaps that most closely match the size of the pixel being textured and uses
- * the `LinearFilter` criterion to produce a texture value from each mipmap. The final texture value
- * is a weighted average of those two values.
+ * 线性 Mipmap 线性过滤（三线性过滤）
+ *
+ * 选择两个最接近被纹理化像素大小的 mipmap，
+ * 对每个 mipmap 使用线性过滤，最终值是两个值的加权平均。
+ * 提供最高质量的纹理过滤效果。
  *
  * @type {number}
  * @constant
  */
 export const LinearMipmapLinearFilter = 1008;
-export const LinearMipMapLinearFilter = 1008; // legacy
+export const LinearMipMapLinearFilter = 1008; // 遗留命名
+
+// ========================================
+// 纹理数据类型常量
+// ========================================
 
 /**
- * An unsigned byte data type for textures.
+ * 无符号字节类型
+ *
+ * 纹理的无符号字节数据类型 (0-255)。
+ * 这是最常用的纹理数据类型，适用于标准的 8 位颜色。
  *
  * @type {number}
  * @constant
@@ -634,7 +957,10 @@ export const LinearMipMapLinearFilter = 1008; // legacy
 export const UnsignedByteType = 1009;
 
 /**
- * A byte data type for textures.
+ * 有符号字节类型
+ *
+ * 纹理的有符号字节数据类型 (-128 到 127)。
+ * 常用于法线贴图等需要负值的纹理。
  *
  * @type {number}
  * @constant
@@ -642,7 +968,10 @@ export const UnsignedByteType = 1009;
 export const ByteType = 1010;
 
 /**
- * A short data type for textures.
+ * 有符号短整型
+ *
+ * 纹理的有符号短整型数据类型 (-32768 到 32767)。
+ * 提供更高的精度，用于高精度纹理数据。
  *
  * @type {number}
  * @constant
@@ -650,7 +979,10 @@ export const ByteType = 1010;
 export const ShortType = 1011;
 
 /**
- * An unsigned short data type for textures.
+ * 无符号短整型
+ *
+ * 纹理的无符号短整型数据类型 (0-65535)。
+ * 常用于深度纹理和高精度颜色数据。
  *
  * @type {number}
  * @constant
@@ -658,7 +990,10 @@ export const ShortType = 1011;
 export const UnsignedShortType = 1012;
 
 /**
- * An int data type for textures.
+ * 有符号整型
+ *
+ * 纹理的有符号整型数据类型。
+ * 用于需要大范围整数值的特殊纹理。
  *
  * @type {number}
  * @constant
@@ -666,7 +1001,10 @@ export const UnsignedShortType = 1012;
 export const IntType = 1013;
 
 /**
- * An unsigned int data type for textures.
+ * 无符号整型
+ *
+ * 纹理的无符号整型数据类型。
+ * 用于高精度索引或大范围无符号值。
  *
  * @type {number}
  * @constant
@@ -674,7 +1012,10 @@ export const IntType = 1013;
 export const UnsignedIntType = 1014;
 
 /**
- * A float data type for textures.
+ * 浮点型
+ *
+ * 纹理的 32 位浮点数据类型。
+ * 用于 HDR 纹理、深度纹理和需要高精度的数据。
  *
  * @type {number}
  * @constant
@@ -682,7 +1023,10 @@ export const UnsignedIntType = 1014;
 export const FloatType = 1015;
 
 /**
- * A half float data type for textures.
+ * 半精度浮点型
+ *
+ * 纹理的 16 位半精度浮点数据类型。
+ * 在保持较好精度的同时减少内存使用，常用于 HDR 纹理。
  *
  * @type {number}
  * @constant
@@ -690,7 +1034,10 @@ export const FloatType = 1015;
 export const HalfFloatType = 1016;
 
 /**
- * An unsigned short 4_4_4_4 (packed) data type for textures.
+ * 无符号短整型 4_4_4_4 打包格式
+ *
+ * 16 位打包格式，每个 RGBA 分量各占 4 位。
+ * 适用于低精度但需要 Alpha 通道的纹理。
  *
  * @type {number}
  * @constant
@@ -698,7 +1045,10 @@ export const HalfFloatType = 1016;
 export const UnsignedShort4444Type = 1017;
 
 /**
- * An unsigned short 5_5_5_1 (packed) data type for textures.
+ * 无符号短整型 5_5_5_1 打包格式
+ *
+ * 16 位打包格式，RGB 各占 5 位，Alpha 占 1 位。
+ * 适用于不需要高精度 Alpha 的纹理。
  *
  * @type {number}
  * @constant
@@ -706,7 +1056,10 @@ export const UnsignedShort4444Type = 1017;
 export const UnsignedShort5551Type = 1018;
 
 /**
- * An unsigned int 24_8 data type for textures.
+ * 无符号整型 24_8 格式
+ *
+ * 32 位格式，通常用于深度模板纹理。
+ * 24 位用于深度，8 位用于模板。
  *
  * @type {number}
  * @constant
@@ -714,15 +1067,25 @@ export const UnsignedShort5551Type = 1018;
 export const UnsignedInt248Type = 1020;
 
 /**
- * An unsigned int 5_9_9_9 (packed) data type for textures.
+ * 无符号整型 5_9_9_9 打包格式
+ *
+ * 32 位共享指数格式，用于 HDR 纹理。
+ * RGB 各占 9 位尾数，共享 5 位指数。
  *
  * @type {number}
  * @constant
  */
 export const UnsignedInt5999Type = 35902;
 
+// ========================================
+// 纹理格式常量
+// ========================================
+
 /**
- * Discards the red, green and blue components and reads just the alpha component.
+ * Alpha 格式
+ *
+ * 丢弃红、绿、蓝分量，只读取 Alpha 分量。
+ * 常用于透明度遮罩和 Alpha 测试。
  *
  * @type {number}
  * @constant
@@ -730,7 +1093,10 @@ export const UnsignedInt5999Type = 35902;
 export const AlphaFormat = 1021;
 
 /**
- * Discards the alpha component and reads the red, green and blue component.
+ * RGB 格式
+ *
+ * 丢弃 Alpha 分量，读取红、绿、蓝分量。
+ * 这是最常用的不透明纹理格式。
  *
  * @type {number}
  * @constant
@@ -738,7 +1104,10 @@ export const AlphaFormat = 1021;
 export const RGBFormat = 1022;
 
 /**
- * Reads the red, green, blue and alpha components.
+ * RGBA 格式
+ *
+ * 读取红、绿、蓝和 Alpha 分量。
+ * 支持透明度的完整颜色格式。
  *
  * @type {number}
  * @constant
@@ -746,7 +1115,10 @@ export const RGBFormat = 1022;
 export const RGBAFormat = 1023;
 
 /**
- * Reads each element as a single depth value, converts it to floating point, and clamps to the range `[0,1]`.
+ * 深度格式
+ *
+ * 将每个元素作为单一深度值读取，转换为浮点数并钳制到 [0,1] 范围。
+ * 用于深度纹理和阴影贴图。
  *
  * @type {number}
  * @constant
@@ -754,8 +1126,10 @@ export const RGBAFormat = 1023;
 export const DepthFormat = 1026;
 
 /**
- * Reads each element is a pair of depth and stencil values. The depth component of the pair is interpreted as
- * in `DepthFormat`. The stencil component is interpreted based on the depth + stencil internal format.
+ * 深度模板格式
+ *
+ * 每个元素包含深度和模板值对。深度分量按 DepthFormat 解释，
+ * 模板分量根据深度+模板内部格式解释。
  *
  * @type {number}
  * @constant
@@ -763,7 +1137,10 @@ export const DepthFormat = 1026;
 export const DepthStencilFormat = 1027;
 
 /**
- * Discards the green, blue and alpha components and reads just the red component.
+ * 红色格式
+ *
+ * 丢弃绿、蓝和 Alpha 分量，只读取红色分量。
+ * 常用于单通道数据，如高度图、遮罩等。
  *
  * @type {number}
  * @constant
@@ -771,7 +1148,10 @@ export const DepthStencilFormat = 1027;
 export const RedFormat = 1028;
 
 /**
- * Discards the green, blue and alpha components and reads just the red component. The texels are read as integers instead of floating point.
+ * 红色整数格式
+ *
+ * 丢弃绿、蓝和 Alpha 分量，只读取红色分量。
+ * 纹理元素作为整数而非浮点数读取。
  *
  * @type {number}
  * @constant
@@ -779,7 +1159,10 @@ export const RedFormat = 1028;
 export const RedIntegerFormat = 1029;
 
 /**
- * Discards the alpha, and blue components and reads the red, and green components.
+ * RG 格式
+ *
+ * 丢弃 Alpha 和蓝色分量，读取红色和绿色分量。
+ * 常用于法线贴图的 XY 分量或双通道数据。
  *
  * @type {number}
  * @constant
@@ -787,7 +1170,10 @@ export const RedIntegerFormat = 1029;
 export const RGFormat = 1030;
 
 /**
- * Discards the alpha, and blue components and reads the red, and green components. The texels are read as integers instead of floating point.
+ * RG 整数格式
+ *
+ * 丢弃 Alpha 和蓝色分量，读取红色和绿色分量。
+ * 纹理元素作为整数而非浮点数读取。
  *
  * @type {number}
  * @constant
@@ -795,7 +1181,10 @@ export const RGFormat = 1030;
 export const RGIntegerFormat = 1031;
 
 /**
- * Discards the alpha component and reads the red, green and blue component. The texels are read as integers instead of floating point.
+ * RGB 整数格式
+ *
+ * 丢弃 Alpha 分量，读取红、绿、蓝分量。
+ * 纹理元素作为整数而非浮点数读取。
  *
  * @type {number}
  * @constant
@@ -803,15 +1192,25 @@ export const RGIntegerFormat = 1031;
 export const RGBIntegerFormat = 1032;
 
 /**
- * Reads the red, green, blue and alpha components. The texels are read as integers instead of floating point.
+ * RGBA 整数格式
+ *
+ * 读取红、绿、蓝和 Alpha 分量。
+ * 纹理元素作为整数而非浮点数读取。
  *
  * @type {number}
  * @constant
  */
 export const RGBAIntegerFormat = 1033;
 
+// ========================================
+// 压缩纹理格式常量
+// ========================================
+
 /**
- * A DXT1-compressed image in an RGB image format.
+ * RGB S3TC DXT1 格式
+ *
+ * RGB 图像格式的 DXT1 压缩图像。
+ * 提供 6:1 的压缩比，不支持 Alpha 通道。
  *
  * @type {number}
  * @constant
@@ -819,7 +1218,10 @@ export const RGBAIntegerFormat = 1033;
 export const RGB_S3TC_DXT1_Format = 33776;
 
 /**
- * A DXT1-compressed image in an RGB image format with a simple on/off alpha value.
+ * RGBA S3TC DXT1 格式
+ *
+ * RGB 图像格式的 DXT1 压缩图像，带有简单的开/关 Alpha 值。
+ * 支持 1 位 Alpha（完全透明或完全不透明）。
  *
  * @type {number}
  * @constant
@@ -827,7 +1229,10 @@ export const RGB_S3TC_DXT1_Format = 33776;
 export const RGBA_S3TC_DXT1_Format = 33777;
 
 /**
- * A DXT3-compressed image in an RGBA image format. Compared to a 32-bit RGBA texture, it offers 4:1 compression.
+ * RGBA S3TC DXT3 格式
+ *
+ * RGBA 图像格式的 DXT3 压缩图像。
+ * 相比 32 位 RGBA 纹理提供 4:1 压缩比，Alpha 压缩质量中等。
  *
  * @type {number}
  * @constant
@@ -835,8 +1240,10 @@ export const RGBA_S3TC_DXT1_Format = 33777;
 export const RGBA_S3TC_DXT3_Format = 33778;
 
 /**
- * A DXT5-compressed image in an RGBA image format. It also provides a 4:1 compression, but differs to the DXT3
- * compression in how the alpha compression is done.
+ * RGBA S3TC DXT5 格式
+ *
+ * RGBA 图像格式的 DXT5 压缩图像。
+ * 同样提供 4:1 压缩比，但 Alpha 压缩方式与 DXT3 不同，质量更高。
  *
  * @type {number}
  * @constant
@@ -844,7 +1251,10 @@ export const RGBA_S3TC_DXT3_Format = 33778;
 export const RGBA_S3TC_DXT5_Format = 33779;
 
 /**
- * PVRTC RGB compression in 4-bit mode. One block for each 4×4 pixels.
+ * RGB PVRTC 4BPP V1 格式
+ *
+ * 4 位模式的 PVRTC RGB 压缩。
+ * 每个 4×4 像素块使用一个压缩块，主要用于移动设备。
  *
  * @type {number}
  * @constant
@@ -852,7 +1262,10 @@ export const RGBA_S3TC_DXT5_Format = 33779;
 export const RGB_PVRTC_4BPPV1_Format = 35840;
 
 /**
- * PVRTC RGB compression in 2-bit mode. One block for each 8×4 pixels.
+ * RGB PVRTC 2BPP V1 格式
+ *
+ * 2 位模式的 PVRTC RGB 压缩。
+ * 每个 8×4 像素块使用一个压缩块，压缩比更高。
  *
  * @type {number}
  * @constant
@@ -1084,9 +1497,15 @@ export const LoopOnce = 2200;
  */
 export const LoopRepeat = 2201;
 
+// ========================================
+// 动画循环和插值常量
+// ========================================
+
 /**
- * Animations are played with a chosen number of repetitions, alternately playing forward
- * and backward.
+ * 乒乓循环
+ *
+ * 动画以选定的重复次数播放，交替向前和向后播放。
+ * 创建来回摆动的效果，常用于周期性动画。
  *
  * @type {number}
  * @constant
@@ -1094,7 +1513,10 @@ export const LoopRepeat = 2201;
 export const LoopPingPong = 2202;
 
 /**
- * Discrete interpolation mode for keyframe tracks.
+ * 离散插值模式
+ *
+ * 关键帧轨道的离散插值模式。
+ * 不进行插值，直接跳跃到下一个关键帧值。
  *
  * @type {number}
  * @constant
@@ -1102,7 +1524,10 @@ export const LoopPingPong = 2202;
 export const InterpolateDiscrete = 2300;
 
 /**
- * Linear interpolation mode for keyframe tracks.
+ * 线性插值模式
+ *
+ * 关键帧轨道的线性插值模式。
+ * 在关键帧之间进行直线插值，产生匀速变化。
  *
  * @type {number}
  * @constant
@@ -1110,15 +1535,25 @@ export const InterpolateDiscrete = 2300;
 export const InterpolateLinear = 2301;
 
 /**
- * Smooth interpolation mode for keyframe tracks.
+ * 平滑插值模式
+ *
+ * 关键帧轨道的平滑插值模式。
+ * 使用样条曲线插值，产生平滑的过渡效果。
  *
  * @type {number}
  * @constant
  */
 export const InterpolateSmooth = 2302;
 
+// ========================================
+// 动画结束模式常量
+// ========================================
+
 /**
- * Zero curvature ending for animations.
+ * 零曲率结束
+ *
+ * 动画的零曲率结束模式。
+ * 在动画结束时保持零曲率，产生平滑的停止。
  *
  * @type {number}
  * @constant
@@ -1126,7 +1561,10 @@ export const InterpolateSmooth = 2302;
 export const ZeroCurvatureEnding = 2400;
 
 /**
- * Zero slope ending for animations.
+ * 零斜率结束
+ *
+ * 动画的零斜率结束模式。
+ * 在动画结束时保持零斜率，产生平缓的停止。
  *
  * @type {number}
  * @constant
@@ -1214,8 +1652,15 @@ export const RGBDepthPacking = 3202;
  */
 export const RGDepthPacking = 3203;
 
+// ========================================
+// 法线贴图类型常量
+// ========================================
+
 /**
- * Normal information is relative to the underlying surface.
+ * 切线空间法线贴图
+ *
+ * 法线信息相对于底层表面。
+ * 这是最常用的法线贴图类型，法线相对于表面的切线空间。
  *
  * @type {number}
  * @constant
@@ -1223,57 +1668,88 @@ export const RGDepthPacking = 3203;
 export const TangentSpaceNormalMap = 0;
 
 /**
- * Normal information is relative to the object orientation.
+ * 对象空间法线贴图
+ *
+ * 法线信息相对于对象的方向。
+ * 法线直接在对象的本地坐标系中定义。
  *
  * @type {number}
  * @constant
  */
 export const ObjectSpaceNormalMap = 1;
 
-// Color space string identifiers, matching CSS Color Module Level 4 and WebGPU names where available.
+// ========================================
+// 颜色空间常量
+// ========================================
+// 颜色空间字符串标识符，与 CSS Color Module Level 4 和 WebGPU 名称匹配（如果可用）
 
 /**
- * No color space.
+ * 无颜色空间
+ *
+ * 不指定颜色空间，使用原始数据。
  *
  * @type {string}
  * @constant
  */
-export const NoColorSpace = '';
+export const NoColorSpace = "";
 
 /**
- * sRGB color space.
+ * sRGB 颜色空间
+ *
+ * 标准 RGB 颜色空间，这是最常用的颜色空间。
+ * 适用于大多数显示设备和 Web 内容。
  *
  * @type {string}
  * @constant
  */
-export const SRGBColorSpace = 'srgb';
+export const SRGBColorSpace = "srgb";
 
 /**
- * sRGB-linear color space.
+ * 线性 sRGB 颜色空间
+ *
+ * 线性的 sRGB 颜色空间，没有伽马校正。
+ * 用于线性光照计算和 HDR 渲染。
  *
  * @type {string}
  * @constant
  */
-export const LinearSRGBColorSpace = 'srgb-linear';
+export const LinearSRGBColorSpace = "srgb-linear";
+
+// ========================================
+// 颜色传输函数常量
+// ========================================
 
 /**
- * Linear transfer function.
+ * 线性传输函数
+ *
+ * 线性颜色传输函数，不进行伽马校正。
+ * 用于线性光照计算。
  *
  * @type {string}
  * @constant
  */
-export const LinearTransfer = 'linear';
+export const LinearTransfer = "linear";
 
 /**
- * sRGB transfer function.
+ * sRGB 传输函数
+ *
+ * sRGB 颜色传输函数，包含伽马校正。
+ * 这是显示设备的标准传输函数。
  *
  * @type {string}
  * @constant
  */
-export const SRGBTransfer = 'srgb';
+export const SRGBTransfer = "srgb";
+
+// ========================================
+// 模板缓冲区操作常量
+// ========================================
 
 /**
- * Sets the stencil buffer value to `0`.
+ * 零模板操作
+ *
+ * 将模板缓冲区值设置为 0。
+ * 用于清除模板值。
  *
  * @type {number}
  * @constant
@@ -1281,7 +1757,10 @@ export const SRGBTransfer = 'srgb';
 export const ZeroStencilOp = 0;
 
 /**
- * Keeps the current value.
+ * 保持模板操作
+ *
+ * 保持当前模板缓冲区值不变。
+ * 这是最常用的模板操作。
  *
  * @type {number}
  * @constant
@@ -1289,7 +1768,10 @@ export const ZeroStencilOp = 0;
 export const KeepStencilOp = 7680;
 
 /**
- * Sets the stencil buffer value to the specified reference value.
+ * 替换模板操作
+ *
+ * 将模板缓冲区值设置为指定的参考值。
+ * 用于写入特定的模板值。
  *
  * @type {number}
  * @constant
@@ -1297,7 +1779,10 @@ export const KeepStencilOp = 7680;
 export const ReplaceStencilOp = 7681;
 
 /**
- * Increments the current stencil buffer value. Clamps to the maximum representable unsigned value.
+ * 递增模板操作
+ *
+ * 递增当前模板缓冲区值。
+ * 钳制到最大可表示的无符号值。
  *
  * @type {number}
  * @constant
@@ -1305,7 +1790,10 @@ export const ReplaceStencilOp = 7681;
 export const IncrementStencilOp = 7682;
 
 /**
- * Decrements the current stencil buffer value. Clamps to `0`.
+ * 递减模板操作
+ *
+ * 递减当前模板缓冲区值。
+ * 钳制到 0。
  *
  * @type {number}
  * @constant
@@ -1313,8 +1801,10 @@ export const IncrementStencilOp = 7682;
 export const DecrementStencilOp = 7683;
 
 /**
- * Increments the current stencil buffer value. Wraps stencil buffer value to zero when incrementing
- * the maximum representable unsigned value.
+ * 递增环绕模板操作
+ *
+ * 递增当前模板缓冲区值。当递增最大可表示无符号值时，
+ * 模板缓冲区值环绕到零。
  *
  * @type {number}
  * @constant
@@ -1322,8 +1812,10 @@ export const DecrementStencilOp = 7683;
 export const IncrementWrapStencilOp = 34055;
 
 /**
- * Decrements the current stencil buffer value. Wraps stencil buffer value to the maximum representable
- * unsigned value when decrementing a stencil buffer value of `0`.
+ * 递减环绕模板操作
+ *
+ * 递减当前模板缓冲区值。当递减模板缓冲区值 0 时，
+ * 环绕到最大可表示的无符号值。
  *
  * @type {number}
  * @constant
@@ -1331,15 +1823,25 @@ export const IncrementWrapStencilOp = 34055;
 export const DecrementWrapStencilOp = 34056;
 
 /**
- * Inverts the current stencil buffer value bitwise.
+ * 反转模板操作
+ *
+ * 按位反转当前模板缓冲区值。
+ * 将所有位取反。
  *
  * @type {number}
  * @constant
  */
 export const InvertStencilOp = 5386;
 
+// ========================================
+// 模板测试函数常量
+// ========================================
+
 /**
- * Will never return true.
+ * 从不通过模板函数
+ *
+ * 模板测试永远不会返回 true。
+ * 用于完全阻止渲染。
  *
  * @type {number}
  * @constant
@@ -1347,7 +1849,9 @@ export const InvertStencilOp = 5386;
 export const NeverStencilFunc = 512;
 
 /**
- * Will return true if the stencil reference value is less than the current stencil value.
+ * 小于模板函数
+ *
+ * 当模板参考值小于当前模板值时返回 true。
  *
  * @type {number}
  * @constant
@@ -1355,7 +1859,10 @@ export const NeverStencilFunc = 512;
 export const LessStencilFunc = 513;
 
 /**
- * Will return true if the stencil reference value is equal to the current stencil value.
+ * 等于模板函数
+ *
+ * 当模板参考值等于当前模板值时返回 true。
+ * 这是最常用的模板测试函数。
  *
  * @type {number}
  * @constant
@@ -1363,7 +1870,9 @@ export const LessStencilFunc = 513;
 export const EqualStencilFunc = 514;
 
 /**
- * Will return true if the stencil reference value is less than or equal to the current stencil value.
+ * 小于等于模板函数
+ *
+ * 当模板参考值小于或等于当前模板值时返回 true。
  *
  * @type {number}
  * @constant
@@ -1371,7 +1880,9 @@ export const EqualStencilFunc = 514;
 export const LessEqualStencilFunc = 515;
 
 /**
- * Will return true if the stencil reference value is greater than the current stencil value.
+ * 大于模板函数
+ *
+ * 当模板参考值大于当前模板值时返回 true。
  *
  * @type {number}
  * @constant
@@ -1379,7 +1890,9 @@ export const LessEqualStencilFunc = 515;
 export const GreaterStencilFunc = 516;
 
 /**
- * Will return true if the stencil reference value is not equal to the current stencil value.
+ * 不等于模板函数
+ *
+ * 当模板参考值不等于当前模板值时返回 true。
  *
  * @type {number}
  * @constant
@@ -1387,7 +1900,9 @@ export const GreaterStencilFunc = 516;
 export const NotEqualStencilFunc = 517;
 
 /**
- * Will return true if the stencil reference value is greater than or equal to the current stencil value.
+ * 大于等于模板函数
+ *
+ * 当模板参考值大于或等于当前模板值时返回 true。
  *
  * @type {number}
  * @constant
@@ -1395,15 +1910,25 @@ export const NotEqualStencilFunc = 517;
 export const GreaterEqualStencilFunc = 518;
 
 /**
- * Will always return true.
+ * 总是通过模板函数
+ *
+ * 模板测试总是返回 true。
+ * 相当于禁用模板测试。
  *
  * @type {number}
  * @constant
  */
 export const AlwaysStencilFunc = 519;
 
+// ========================================
+// 纹理比较函数常量
+// ========================================
+
 /**
- * Never pass.
+ * 从不通过比较
+ *
+ * 比较测试永远不会通过。
+ * 用于完全禁用纹理采样。
  *
  * @type {number}
  * @constant
@@ -1411,7 +1936,10 @@ export const AlwaysStencilFunc = 519;
 export const NeverCompare = 512;
 
 /**
- * Pass if the incoming value is less than the texture value.
+ * 小于比较
+ *
+ * 当输入值小于纹理值时通过。
+ * 常用于阴影贴图的深度比较。
  *
  * @type {number}
  * @constant
@@ -1419,7 +1947,9 @@ export const NeverCompare = 512;
 export const LessCompare = 513;
 
 /**
- * Pass if the incoming value equals the texture value.
+ * 等于比较
+ *
+ * 当输入值等于纹理值时通过。
  *
  * @type {number}
  * @constant
@@ -1427,7 +1957,10 @@ export const LessCompare = 513;
 export const EqualCompare = 514;
 
 /**
- * Pass if the incoming value is less than or equal to the texture value.
+ * 小于等于比较
+ *
+ * 当输入值小于或等于纹理值时通过。
+ * 这是阴影贴图最常用的比较函数。
  *
  * @type {number}
  * @constant
@@ -1435,7 +1968,9 @@ export const EqualCompare = 514;
 export const LessEqualCompare = 515;
 
 /**
- * Pass if the incoming value is greater than the texture value.
+ * 大于比较
+ *
+ * 当输入值大于纹理值时通过。
  *
  * @type {number}
  * @constant
@@ -1443,7 +1978,9 @@ export const LessEqualCompare = 515;
 export const GreaterCompare = 516;
 
 /**
- * Pass if the incoming value is not equal to the texture value.
+ * 不等于比较
+ *
+ * 当输入值不等于纹理值时通过。
  *
  * @type {number}
  * @constant
@@ -1451,7 +1988,9 @@ export const GreaterCompare = 516;
 export const NotEqualCompare = 517;
 
 /**
- * Pass if the incoming value is greater than or equal to the texture value.
+ * 大于等于比较
+ *
+ * 当输入值大于或等于纹理值时通过。
  *
  * @type {number}
  * @constant
@@ -1459,16 +1998,25 @@ export const NotEqualCompare = 517;
 export const GreaterEqualCompare = 518;
 
 /**
- * Always pass.
+ * 总是通过比较
+ *
+ * 比较测试总是通过。
+ * 相当于禁用比较功能。
  *
  * @type {number}
  * @constant
  */
 export const AlwaysCompare = 519;
 
+// ========================================
+// 缓冲区使用模式常量
+// ========================================
+
 /**
- * The contents are intended to be specified once by the application, and used many
- * times as the source for drawing and image specification commands.
+ * 静态绘制使用
+ *
+ * 内容由应用程序指定一次，并多次用作绘制和图像规范命令的源。
+ * 适用于不经常更改的几何数据，如静态模型。
  *
  * @type {number}
  * @constant
@@ -1476,8 +2024,10 @@ export const AlwaysCompare = 519;
 export const StaticDrawUsage = 35044;
 
 /**
- * The contents are intended to be respecified repeatedly by the application, and
- * used many times as the source for drawing and image specification commands.
+ * 动态绘制使用
+ *
+ * 内容由应用程序重复重新指定，并多次用作绘制和图像规范命令的源。
+ * 适用于经常更新的几何数据，如动画模型。
  *
  * @type {number}
  * @constant
@@ -1485,8 +2035,10 @@ export const StaticDrawUsage = 35044;
 export const DynamicDrawUsage = 35048;
 
 /**
- * The contents are intended to be specified once by the application, and used at most
- * a few times as the source for drawing and image specification commands.
+ * 流式绘制使用
+ *
+ * 内容由应用程序指定一次，最多用作绘制和图像规范命令的源几次。
+ * 适用于临时或一次性使用的数据。
  *
  * @type {number}
  * @constant
@@ -1494,8 +2046,10 @@ export const DynamicDrawUsage = 35048;
 export const StreamDrawUsage = 35040;
 
 /**
- * The contents are intended to be specified once by reading data from the 3D API, and queried
- * many times by the application.
+ * 静态读取使用
+ *
+ * 内容通过从 3D API 读取数据指定一次，并由应用程序多次查询。
+ * 适用于需要 CPU 读取的静态数据。
  *
  * @type {number}
  * @constant
@@ -1503,8 +2057,10 @@ export const StreamDrawUsage = 35040;
 export const StaticReadUsage = 35045;
 
 /**
- * The contents are intended to be respecified repeatedly by reading data from the 3D API, and queried
- * many times by the application.
+ * 动态读取使用
+ *
+ * 内容通过从 3D API 读取数据重复重新指定，并由应用程序多次查询。
+ * 适用于需要 CPU 频繁读取的动态数据。
  *
  * @type {number}
  * @constant
@@ -1512,8 +2068,10 @@ export const StaticReadUsage = 35045;
 export const DynamicReadUsage = 35049;
 
 /**
- * The contents are intended to be specified once by reading data from the 3D API, and queried at most
- * a few times by the application
+ * 流式读取使用
+ *
+ * 内容通过从 3D API 读取数据指定一次，应用程序最多查询几次。
+ * 适用于临时读取的数据。
  *
  * @type {number}
  * @constant
@@ -1521,8 +2079,10 @@ export const DynamicReadUsage = 35049;
 export const StreamReadUsage = 35041;
 
 /**
- * The contents are intended to be specified once by reading data from the 3D API, and used many times as
- * the source for WebGL drawing and image specification commands.
+ * 静态复制使用
+ *
+ * 内容通过从 3D API 读取数据指定一次，并多次用作 WebGL 绘制和图像规范命令的源。
+ * 适用于 GPU 到 GPU 的静态数据复制。
  *
  * @type {number}
  * @constant
@@ -1530,8 +2090,10 @@ export const StreamReadUsage = 35041;
 export const StaticCopyUsage = 35046;
 
 /**
- * The contents are intended to be respecified repeatedly by reading data from the 3D API, and used many times
- * as the source for WebGL drawing and image specification commands.
+ * 动态复制使用
+ *
+ * 内容通过从 3D API 读取数据重复重新指定，并多次用作 WebGL 绘制和图像规范命令的源。
+ * 适用于 GPU 到 GPU 的动态数据复制。
  *
  * @type {number}
  * @constant
@@ -1539,32 +2101,47 @@ export const StaticCopyUsage = 35046;
 export const DynamicCopyUsage = 35050;
 
 /**
- * The contents are intended to be specified once by reading data from the 3D API, and used at most a few times
- * as the source for WebGL drawing and image specification commands.
+ * 流式复制使用
+ *
+ * 内容通过从 3D API 读取数据指定一次，最多几次用作 WebGL 绘制和图像规范命令的源。
+ * 适用于临时的 GPU 到 GPU 数据复制。
  *
  * @type {number}
  * @constant
  */
 export const StreamCopyUsage = 35042;
 
+// ========================================
+// 着色器和坐标系统常量
+// ========================================
+
 /**
- * GLSL 1 shader code.
+ * GLSL 1.0 着色器代码版本
+ *
+ * 对应 WebGL 1.0 的着色器语言版本。
+ * 版本字符串为 "100"。
  *
  * @type {string}
  * @constant
  */
-export const GLSL1 = '100';
+export const GLSL1 = "100";
 
 /**
- * GLSL 3 shader code.
+ * GLSL 3.0 ES 着色器代码版本
+ *
+ * 对应 WebGL 2.0 的着色器语言版本。
+ * 版本字符串为 "300 es"。
  *
  * @type {string}
  * @constant
  */
-export const GLSL3 = '300 es';
+export const GLSL3 = "300 es";
 
 /**
- * WebGL coordinate system.
+ * WebGL 坐标系统
+ *
+ * 标识使用 WebGL 的坐标系统约定。
+ * WebGL 使用右手坐标系，Y 轴向上。
  *
  * @type {number}
  * @constant
@@ -1572,96 +2149,123 @@ export const GLSL3 = '300 es';
 export const WebGLCoordinateSystem = 2000;
 
 /**
- * WebGPU coordinate system.
+ * WebGPU 坐标系统
+ *
+ * 标识使用 WebGPU 的坐标系统约定。
+ * WebGPU 使用左手坐标系，Y 轴向下。
  *
  * @type {number}
  * @constant
  */
 export const WebGPUCoordinateSystem = 2001;
 
+// ========================================
+// 查询和采样常量对象
+// ========================================
+
 /**
- * Represents the different timestamp query types.
+ * 时间戳查询类型
+ *
+ * 表示不同的时间戳查询类型，用于性能分析。
  *
  * @type {ConstantsTimestampQuery}
  * @constant
  */
 export const TimestampQuery = {
-	COMPUTE: 'compute',
-	RENDER: 'render'
+  COMPUTE: "compute", // 计算着色器查询
+  RENDER: "render", // 渲染查询
 };
 
 /**
- * Represents mouse buttons and interaction types in context of controls.
+ * 插值采样类型
+ *
+ * 表示着色器中不同的插值采样类型。
  *
  * @type {ConstantsInterpolationSamplingType}
  * @constant
  */
 export const InterpolationSamplingType = {
-	PERSPECTIVE: 'perspective',
-	LINEAR: 'linear',
-	FLAT: 'flat'
+  PERSPECTIVE: "perspective", // 透视校正插值
+  LINEAR: "linear", // 线性插值
+  FLAT: "flat", // 平面插值（无插值）
 };
 
 /**
- * Represents the different interpolation sampling modes.
+ * 插值采样模式
+ *
+ * 表示不同的插值采样模式，用于多重采样。
  *
  * @type {ConstantsInterpolationSamplingMode}
  * @constant
  */
 export const InterpolationSamplingMode = {
-	NORMAL: 'normal',
-	CENTROID: 'centroid',
-	SAMPLE: 'sample',
-	FIRST: 'first',
-	EITHER: 'either'
+  NORMAL: "normal", // 正常采样模式
+  CENTROID: "centroid", // 质心采样模式
+  SAMPLE: "sample", // 样本特定采样模式
+  FIRST: "first", // 使用第一个顶点的平面插值
+  EITHER: "either", // 使用任一顶点的平面插值
 };
 
+// ========================================
+// TypeScript 类型定义
+// ========================================
+
 /**
- * This type represents mouse buttons and interaction types in context of controls.
+ * 鼠标按键和控制器交互类型定义
+ *
+ * 这个类型表示控制器上下文中的鼠标按键和交互类型。
  *
  * @typedef {Object} ConstantsMouse
- * @property {number} MIDDLE - The left mouse button.
- * @property {number} LEFT - The middle mouse button.
- * @property {number} RIGHT - The right mouse button.
- * @property {number} ROTATE - A rotate interaction.
- * @property {number} DOLLY - A dolly interaction.
- * @property {number} PAN - A pan interaction.
- **/
-
-/**
- * This type represents touch interaction types in context of controls.
- *
- * @typedef {Object} ConstantsTouch
- * @property {number} ROTATE - A rotate interaction.
- * @property {number} PAN - A pan interaction.
- * @property {number} DOLLY_PAN - The dolly-pan interaction.
- * @property {number} DOLLY_ROTATE - A dolly-rotate interaction.
- **/
-
-/**
- * This type represents the different timestamp query types.
- *
- * @typedef {Object} ConstantsTimestampQuery
- * @property {string} COMPUTE - A `compute` timestamp query.
- * @property {string} RENDER - A `render` timestamp query.
- **/
-
-/**
- * Represents the different interpolation sampling types.
- *
- * @typedef {Object} ConstantsInterpolationSamplingType
- * @property {string} PERSPECTIVE - Perspective-correct interpolation.
- * @property {string} LINEAR - Linear interpolation.
- * @property {string} FLAT - Flat interpolation.
+ * @property {number} LEFT - 鼠标左键
+ * @property {number} MIDDLE - 鼠标中键
+ * @property {number} RIGHT - 鼠标右键
+ * @property {number} ROTATE - 旋转交互
+ * @property {number} DOLLY - 缩放交互
+ * @property {number} PAN - 平移交互
  */
 
 /**
- * Represents the different interpolation sampling modes.
+ * 触摸交互类型定义
+ *
+ * 这个类型表示控制器上下文中的触摸交互类型。
+ *
+ * @typedef {Object} ConstantsTouch
+ * @property {number} ROTATE - 旋转交互
+ * @property {number} PAN - 平移交互
+ * @property {number} DOLLY_PAN - 缩放-平移交互
+ * @property {number} DOLLY_ROTATE - 缩放-旋转交互
+ */
+
+/**
+ * 时间戳查询类型定义
+ *
+ * 这个类型表示不同的时间戳查询类型。
+ *
+ * @typedef {Object} ConstantsTimestampQuery
+ * @property {string} COMPUTE - 计算着色器时间戳查询
+ * @property {string} RENDER - 渲染时间戳查询
+ */
+
+/**
+ * 插值采样类型定义
+ *
+ * 表示不同的插值采样类型。
+ *
+ * @typedef {Object} ConstantsInterpolationSamplingType
+ * @property {string} PERSPECTIVE - 透视校正插值
+ * @property {string} LINEAR - 线性插值
+ * @property {string} FLAT - 平面插值
+ */
+
+/**
+ * 插值采样模式定义
+ *
+ * 表示不同的插值采样模式。
  *
  * @typedef {Object} ConstantsInterpolationSamplingMode
- * @property {string} NORMAL - Normal sampling mode.
- * @property {string} CENTROID - Centroid sampling mode.
- * @property {string} SAMPLE - Sample-specific sampling mode.
- * @property {string} FLAT_FIRST - Flat interpolation using the first vertex.
- * @property {string} FLAT_EITHER - Flat interpolation using either vertex.
+ * @property {string} NORMAL - 正常采样模式
+ * @property {string} CENTROID - 质心采样模式
+ * @property {string} SAMPLE - 样本特定采样模式
+ * @property {string} FIRST - 使用第一个顶点的平面插值
+ * @property {string} EITHER - 使用任一顶点的平面插值
  */
