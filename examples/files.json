@@ -562,6 +562,7 @@
     "misc_uv_tests"
   ],
   "custom": [
+    "custom/base_cube/cube",
     "custom/sphere_movement/webgl_buffergeometry_sphere_movement"
   ]
 }

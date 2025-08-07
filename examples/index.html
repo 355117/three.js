@@ -59,6 +59,47 @@
       let allFiles = {};
       let allTags = {};
 
+      // 本地存储键名
+      const STORAGE_KEYS = {
+        CURRENT_SECTION: "threejs_examples_current_section",
+        SELECTED_FILE: "threejs_examples_selected_file",
+        SEARCH_QUERY: "threejs_examples_search_query",
+      };
+
+      // 状态管理函数
+      function saveState() {
+        try {
+          localStorage.setItem(STORAGE_KEYS.CURRENT_SECTION, currentSection);
+          if (selected) {
+            localStorage.setItem(STORAGE_KEYS.SELECTED_FILE, selected);
+          }
+          localStorage.setItem(STORAGE_KEYS.SEARCH_QUERY, filterInput.value || "");
+        } catch (e) {
+          console.warn("无法保存状态到本地存储:", e);
+        }
+      }
+
+      function loadState() {
+        try {
+          const savedSection = localStorage.getItem(STORAGE_KEYS.CURRENT_SECTION);
+          const savedFile = localStorage.getItem(STORAGE_KEYS.SELECTED_FILE);
+          const savedQuery = localStorage.getItem(STORAGE_KEYS.SEARCH_QUERY);
+
+          return {
+            section: savedSection || "all",
+            file: savedFile,
+            query: savedQuery || "",
+          };
+        } catch (e) {
+          console.warn("无法从本地存储加载状态:", e);
+          return {
+            section: "all",
+            file: null,
+            query: "",
+          };
+        }
+      }
+
       init();
 
       async function init() {
@@ -71,8 +112,25 @@
         allFiles = files;
         allTags = tags;
 
-        for (const key in files) {
-          const category = files[key];
+        // 加载保存的状态
+        const savedState = loadState();
+
+        // 根据保存的状态设置当前部分
+        currentSection = savedState.section;
+
+        // 根据当前部分决定要显示的文件
+        let filesToShow = {};
+        if (currentSection === "custom") {
+          if (files.custom) {
+            filesToShow.custom = files.custom;
+          }
+        } else {
+          filesToShow = files;
+        }
+
+        // 构建内容
+        for (const key in filesToShow) {
+          const category = filesToShow[key];
 
           const header = document.createElement("h2");
           header.textContent = key;
@@ -92,29 +150,45 @@
 
         content.appendChild(fragment);
 
+        // 更新标签页按钮状态
+        let sectionButtons = document.querySelectorAll("#sections span");
+        sectionButtons.forEach((button) => {
+          button.classList.remove("selected");
+          if (button.getAttribute("data-section") === currentSection) {
+            button.classList.add("selected");
+          }
+        });
+
+        // 处理文件选择 - 优先使用URL hash，然后使用保存的状态
+        let fileToSelect = null;
         if (window.location.hash !== "") {
           const file = window.location.hash.substring(1);
-
-          // use a predefined map of redirects to avoid untrusted URL redirection due to user-provided value
-
           if (validRedirects.has(file) === true) {
-            selectFile(file);
-            viewer.src = validRedirects.get(file);
-            viewer.style.display = "unset";
+            fileToSelect = file;
+          }
+        } else if (savedState.file && validRedirects.has(savedState.file)) {
+          // 只有在当前部分包含该文件时才选择
+          if (currentSection === "all" || (currentSection === "custom" && savedState.file.startsWith("custom/"))) {
+            fileToSelect = savedState.file;
           }
         }
 
-        if (viewer.src === "") {
+        if (fileToSelect) {
+          selectFile(fileToSelect);
+          viewer.src = validRedirects.get(fileToSelect);
+          viewer.style.display = "unset";
+        } else if (viewer.src === "") {
           viewer.srcdoc = document.getElementById("PlaceholderHTML").innerHTML;
           viewer.style.display = "unset";
         }
 
-        filterInput.value = extractQuery();
+        // 设置搜索框值 - 优先使用URL查询，然后使用保存的状态
+        const urlQuery = extractQuery();
+        filterInput.value = urlQuery || savedState.query;
 
         if (filterInput.value !== "") {
           panel.classList.add("searchFocused");
-
-          updateFilter(files, tags);
+          updateFilter(filesToShow, tags);
         }
 
         // Events
@@ -133,10 +207,14 @@
           filterInput.value = "";
           updateFilter(files, tags);
           filterInput.focus();
+          // 保存搜索状态
+          saveState();
         };
 
         filterInput.addEventListener("input", function () {
           updateFilter(files, tags);
+          // 保存搜索状态
+          saveState();
         });
 
         expandButton.addEventListener("click", function (event) {
@@ -155,7 +233,7 @@
         };
 
         // 添加切换功能的事件监听器
-        const sectionButtons = document.querySelectorAll("#sections span");
+        sectionButtons = document.querySelectorAll("#sections span");
         sectionButtons.forEach((button) => {
           button.addEventListener("click", function () {
             const section = this.getAttribute("data-section");
@@ -209,6 +287,9 @@
         panel.classList.remove("open");
 
         selected = file;
+
+        // 保存状态
+        saveState();
 
         // Reveal "View source" button and set attributes to this example
         viewSrcButton.style.display = "";
@@ -309,6 +390,9 @@
       function switchSection(section) {
         currentSection = section;
 
+        // 保存状态
+        saveState();
+
         // 更新按钮状态
         const sectionButtons = document.querySelectorAll("#sections span");
         sectionButtons.forEach((button) => {
@@ -368,8 +452,7 @@
 
         content.appendChild(newFragment);
 
-        // 清空搜索框并重新应用过滤
-        filterInput.value = "";
+        // 重新应用当前的搜索过滤
         updateFilter(filesToShow, allTags);
       }
 
