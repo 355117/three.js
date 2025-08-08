@@ -2,6 +2,8 @@
 
 import chokidar from "chokidar";
 import { updateCustomExamples } from "./update-custom-examples.js";
+import { fileURLToPath } from "url";
+import path from "path";
 
 console.log("开始监听 examples/custom 目录的变化...");
 
@@ -13,7 +15,12 @@ try {
 }
 
 // 监听 examples/custom 目录的变化
-const watcher = chokidar.watch("../custom", {
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const customDir = path.join(__dirname, "../custom");
+
+const watcher = chokidar.watch(customDir, {
   ignored: /(^|[\/\\])\../, // 忽略隐藏文件
   persistent: true,
   ignoreInitial: false, // 初始化时也触发一次

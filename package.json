@@ -49,7 +49,7 @@
     "build-module": "rollup -c utils/build/rollup.config.js --configOnlyModule",
     "build-docs": "jsdoc -c utils/docs/jsdoc.config.json",
     "dev": "node utils/build/dev.js && concurrently --kill-others --names \"WATCH,HTTP\" -c \"bgYellow.bold,bgGreen.bold\" \"npm run watch-custom\" \"servez -p 8080\"",
-    "watch-custom": "node utils/build/watch-custom.js",
+    "watch-custom": "node examples/customScript/watch-custom.js",
     "dev-ssl": "node utils/build/dev.js && servez -p 8080 --ssl",
     "preview": "concurrently --names \"ROLLUP,HTTP\" -c \"bgBlue.bold,bgGreen.bold\" \"rollup -c utils/build/rollup.config.js -w -m inline\" \"servez -p 8080\"",
     "preview-ssl": "concurrently --names \"ROLLUP,HTTPS\" -c \"bgBlue.bold,bgGreen.bold\" \"rollup -c utils/build/rollup.config.js -w -m inline\" \"servez -p 8080 --ssl\"",

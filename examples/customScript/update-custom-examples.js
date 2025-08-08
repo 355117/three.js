@@ -117,7 +117,9 @@ function updateFilesJson(filesJsonPath, customExamples) {
   }
 }
 
-// 如果直接运行此脚本
-updateCustomExamples();
+// 如果直接运行此脚本（而不是被导入）
+if (import.meta.url === `file://${process.argv[1]}`) {
+  updateCustomExamples();
+}
 
 export { updateCustomExamples };
