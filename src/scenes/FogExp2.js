@@ -1,86 +1,170 @@
-import { Color } from '../math/Color.js';
+// 导入颜色类，用于处理雾的颜色
+import { Color } from "../math/Color.js";
 
 /**
- * This class can be used to define an exponential squared fog,
- * which gives a clear view near the camera and a faster than exponentially
- * densening fog farther from the camera.
+ * 指数平方雾效果类
  *
+ * 此类用于定义指数平方雾效果，提供更自然的雾密度分布
+ * 指数平方雾在相机附近保持清晰视野，随着距离增加呈指数平方增长，
+ * 比普通指数雾增长更快，能够创造更真实的大气效果
+ *
+ * 数学原理：
+ * 雾密度计算公式：density = 1 - exp(-distance² × fogDensity)
+ * 其中 distance 是物体到相机的距离，fogDensity 是雾的密度参数
+ *
+ * 特点：
+ * - 雾密度随距离呈指数平方增长
+ * - 近距离处几乎透明，远距离处快速变浓
+ * - 提供更自然、更真实的大气透视效果
+ * - 适合模拟真实世界的雾、霾、烟等效果
+ *
+ * 使用场景：
+ * - 自然环境的大气效果模拟
+ * - 需要真实感的室外场景
+ * - 创造神秘或梦幻的视觉效果
+ * - 优化远距离物体的渲染性能
+ *
+ * 使用示例：
  * ```js
  * const scene = new THREE.Scene();
+ * // 创建灰色指数平方雾，密度为 0.002
  * scene.fog = new THREE.FogExp2( 0xcccccc, 0.002 );
  * ```
  */
 class FogExp2 {
+  /**
+   * 构造一个新的指数平方雾实例
+   *
+   * 指数平方雾使用单一的密度参数来控制雾效果的强度
+   * 密度值越大，雾效果越强，物体在较近距离就会被雾遮挡
+   *
+   * 密度参数的选择建议：
+   * - 0.00025: 默认值，适合大多数场景
+   * - 0.001-0.01: 中等雾效果，适合一般的大气效果
+   * - 0.01-0.1: 浓雾效果，适合特殊天气或神秘场景
+   * - >0.1: 极浓雾，几乎遮挡所有远距离物体
+   *
+   * @param {number|Color} color - 雾的颜色
+   *                              可以是十六进制数值（如 0xcccccc）或 Color 实例
+   * @param {number} [density=0.00025] - 雾的密度参数，控制雾效果增长的速度
+   *                                    值越大，雾效果越强
+   */
+  constructor(color, density = 0.00025) {
+    /**
+     * 类型标识符
+     *
+     * 用于运行时类型检测，可以通过此属性判断对象是否为 FogExp2 实例
+     * 这是 Three.js 中常用的类型检测模式，与 Fog 类的 isFog 属性类似
+     *
+     * @type {boolean}
+     * @readonly
+     * @default true
+     */
+    this.isFogExp2 = true;
 
-	/**
-	 * Constructs a new fog.
-	 *
-	 * @param {number|Color} color - The fog's color.
-	 * @param {number} [density=0.00025] - Defines how fast the fog will grow dense.
-	 */
-	constructor( color, density = 0.00025 ) {
+    /**
+     * 雾的名称
+     *
+     * 可选的标识符，用于调试或场景管理
+     * 在复杂场景中可以通过名称来识别不同的雾实例
+     * 特别是在需要动态切换不同雾效果时很有用
+     *
+     * @type {string}
+     * @default ''
+     */
+    this.name = "";
 
-		/**
-		 * This flag can be used for type testing.
-		 *
-		 * @type {boolean}
-		 * @readonly
-		 * @default true
-		 */
-		this.isFogExp2 = true;
+    /**
+     * 雾的颜色
+     *
+     * 定义雾的颜色，影响被雾遮挡物体的最终颜色
+     * 雾的颜色会与物体原始颜色进行混合，创造大气透视效果
+     *
+     * 颜色选择建议：
+     * - 白色/灰色: 模拟自然雾气
+     * - 蓝色: 模拟大气散射效果
+     * - 暖色调: 创造黄昏或日出效果
+     * - 冷色调: 创造阴郁或神秘氛围
+     *
+     * @type {Color}
+     */
+    this.color = new Color(color);
 
-		/**
-		 * The name of the fog.
-		 *
-		 * @type {string}
-		 */
-		this.name = '';
+    /**
+     * 雾的密度参数
+     *
+     * 控制雾效果增长的速度，是指数平方雾的核心参数
+     * 此值直接影响雾的可见距离和过渡效果
+     *
+     * 密度与可见距离的关系：
+     * - 密度越大，可见距离越短
+     * - 密度越小，雾效果越柔和
+     * - 通常需要根据场景大小调整此值
+     *
+     * 性能考虑：
+     * - 适当的雾密度可以隐藏远距离物体，提高渲染性能
+     * - 过高的密度可能导致场景过于昏暗
+     *
+     * @type {number}
+     * @default 0.00025
+     */
+    this.density = density;
+  }
 
-		/**
-		 * The fog's color.
-		 *
-		 * @type {Color}
-		 */
-		this.color = new Color( color );
+  /**
+   * 克隆当前指数平方雾实例
+   *
+   * 创建一个新的 FogExp2 实例，复制当前实例的所有属性值
+   * 这是一个深拷贝操作，新实例与原实例完全独立
+   *
+   * 使用场景：
+   * - 需要创建相似配置的多个雾实例
+   * - 在不影响原实例的情况下修改雾参数
+   * - 场景复制或模板创建
+   * - 动态雾效果的切换和对比
+   *
+   * @return {FogExp2} 当前实例的克隆副本
+   */
+  clone() {
+    // 创建新的 FogExp2 实例，传入当前实例的颜色和密度
+    return new FogExp2(this.color, this.density);
+  }
 
-		/**
-		 *  Defines how fast the fog will grow dense.
-		 *
-		 * @type {number}
-		 * @default 0.00025
-		 */
-		this.density = density;
-
-	}
-
-	/**
-	 * Returns a new fog with copied values from this instance.
-	 *
-	 * @return {FogExp2} A clone of this instance.
-	 */
-	clone() {
-
-		return new FogExp2( this.color, this.density );
-
-	}
-
-	/**
-	 * Serializes the fog into JSON.
-	 *
-	 * @param {?(Object|string)} meta - An optional value holding meta information about the serialization.
-	 * @return {Object} A JSON object representing the serialized fog
-	 */
-	toJSON( /* meta */ ) {
-
-		return {
-			type: 'FogExp2',
-			name: this.name,
-			color: this.color.getHex(),
-			density: this.density
-		};
-
-	}
-
+  /**
+   * 将指数平方雾序列化为 JSON 格式
+   *
+   * 将雾的所有属性转换为 JSON 对象，用于数据存储、传输或场景保存
+   * 颜色会被转换为十六进制数值格式以便存储和传输
+   *
+   * 序列化的数据可以用于：
+   * - 场景文件的保存和加载
+   * - 网络传输和数据交换
+   * - 配置文件存储
+   * - 调试和日志记录
+   * - 雾效果的预设管理
+   *
+   * @param {?(Object|string)} meta - 可选的元信息，包含序列化相关的额外数据
+   *                                 通常由 Three.js 的序列化系统内部使用
+   * @return {Object} 表示序列化雾的 JSON 对象
+   *                  包含 type、name、color、density 等属性
+   */
+  toJSON(/* meta */) {
+    return {
+      type: "FogExp2", // 类型标识符，区别于线性雾
+      name: this.name, // 雾的名称
+      color: this.color.getHex(), // 颜色的十六进制表示
+      density: this.density, // 密度参数
+    };
+  }
 }
 
+// ===== 模块导出 =====
+
+/**
+ * 导出 FogExp2 类
+ *
+ * FogExp2 类用于创建指数平方雾效果，提供比线性雾更自然的大气效果
+ * 通过调整密度参数，可以创造各种不同强度和风格的雾效果
+ * 是 Three.js 场景渲染中重要的大气效果组件
+ */
 export { FogExp2 };
