@@ -1,125 +1,142 @@
-import Node from '../core/Node.js';
-import { float, addMethodChaining, nodeProxy } from '../tsl/TSLCore.js';
+/**
+ * RemapNode.js - 数值重映射节点
+ *
+ * 该文件实现了将节点值从一个范围重映射到另一个范围的功能。
+ * 常用于数值范围转换和归一化操作。
+ */
+
+// 导入核心节点类
+import Node from "../core/Node.js";
+// 导入TSL核心工具
+import { float, addMethodChaining, nodeProxy } from "../tsl/TSLCore.js";
 
 /**
- * This node allows to remap a node value from one range into another. E.g a value of
- * `0.4` in the range `[ 0.3, 0.5 ]` should be remapped into the normalized range `[ 0, 1 ]`.
- * `RemapNode` takes care of that and converts the original value of `0.4` to `0.5`.
+ * 重映射节点类
+ *
+ * 该节点允许将节点值从一个范围重映射到另一个范围。
+ * 例如，将范围 [0.3, 0.5] 中的值 0.4 重映射到归一化范围 [0, 1]，
+ * RemapNode 会将原始值 0.4 转换为 0.5。
  *
  * @augments Node
  */
 class RemapNode extends Node {
+  /**
+   * 获取节点类型名称
+   * @returns {string} 返回 'RemapNode'
+   */
+  static get type() {
+    return "RemapNode";
+  }
 
-	static get type() {
+  /**
+   * 构造一个新的重映射节点
+   *
+   * @param {Node} node - 要重映射的节点
+   * @param {Node} inLowNode - 源范围的下界
+   * @param {Node} inHighNode - 源范围的上界
+   * @param {Node} [outLowNode=float(0)] - 目标范围的下界
+   * @param {Node} [outHighNode=float(1)] - 目标范围的上界
+   */
+  constructor(node, inLowNode, inHighNode, outLowNode = float(0), outHighNode = float(1)) {
+    super();
 
-		return 'RemapNode';
+    /**
+     * 要重映射的节点
+     *
+     * @type {Node}
+     */
+    this.node = node;
 
-	}
+    /**
+     * 源范围的下界
+     *
+     * @type {Node}
+     */
+    this.inLowNode = inLowNode;
 
-	/**
-	 * Constructs a new remap node.
-	 *
-	 * @param {Node} node - The node that should be remapped.
-	 * @param {Node} inLowNode - The source or current lower bound of the range.
-	 * @param {Node} inHighNode - The source or current upper bound of the range.
-	 * @param {Node} [outLowNode=float(0)] - The target lower bound of the range.
-	 * @param {Node} [outHighNode=float(1)] - The target upper bound of the range.
-	 */
-	constructor( node, inLowNode, inHighNode, outLowNode = float( 0 ), outHighNode = float( 1 ) ) {
+    /**
+     * 源范围的上界
+     *
+     * @type {Node}
+     */
+    this.inHighNode = inHighNode;
 
-		super();
+    /**
+     * 目标范围的下界
+     *
+     * @type {Node}
+     * @default float(0)
+     */
+    this.outLowNode = outLowNode;
 
-		/**
-		 * The node that should be remapped.
-		 *
-		 * @type {Node}
-		 */
-		this.node = node;
+    /**
+     * 目标范围的上界
+     *
+     * @type {Node}
+     * @default float(1)
+     */
+    this.outHighNode = outHighNode;
 
-		/**
-		 * The source or current lower bound of the range.
-		 *
-		 * @type {Node}
-		 */
-		this.inLowNode = inLowNode;
+    /**
+     * 是否在重映射到目标范围之前对节点值进行钳制
+     *
+     * @type {boolean}
+     * @default true
+     */
+    this.doClamp = true;
+  }
 
-		/**
-		 * The source or current upper bound of the range.
-		 *
-		 * @type {Node}
-		 */
-		this.inHighNode = inHighNode;
+  /**
+   * 设置节点的重映射逻辑
+   * 实现线性插值重映射算法
+   *
+   * @returns {Node} 重映射后的节点值
+   */
+  setup() {
+    const { node, inLowNode, inHighNode, outLowNode, outHighNode, doClamp } = this;
 
-		/**
-		 * The target lower bound of the range.
-		 *
-		 * @type {Node}
-		 * @default float(0)
-		 */
-		this.outLowNode = outLowNode;
+    // 计算归一化参数 t = (value - inLow) / (inHigh - inLow)
+    let t = node.sub(inLowNode).div(inHighNode.sub(inLowNode));
 
-		/**
-		 * The target upper bound of the range.
-		 *
-		 * @type {Node}
-		 * @default float(1)
-		 */
-		this.outHighNode = outHighNode;
+    // 如果启用钳制，将 t 限制在 [0, 1] 范围内
+    if (doClamp === true) t = t.clamp();
 
-		/**
-		 * Whether the node value should be clamped before
-		 * remapping it to the target range.
-		 *
-		 * @type {boolean}
-		 * @default true
-		 */
-		this.doClamp = true;
-
-	}
-
-	setup() {
-
-		const { node, inLowNode, inHighNode, outLowNode, outHighNode, doClamp } = this;
-
-		let t = node.sub( inLowNode ).div( inHighNode.sub( inLowNode ) );
-
-		if ( doClamp === true ) t = t.clamp();
-
-		return t.mul( outHighNode.sub( outLowNode ) ).add( outLowNode );
-
-	}
-
+    // 应用线性插值：outLow + t * (outHigh - outLow)
+    return t.mul(outHighNode.sub(outLowNode)).add(outLowNode);
+  }
 }
 
+// 导出默认类
 export default RemapNode;
 
 /**
- * TSL function for creating a remap node.
+ * TSL 函数：创建重映射节点（不启用钳制）
  *
  * @tsl
  * @function
- * @param {Node} node - The node that should be remapped.
- * @param {Node} inLowNode - The source or current lower bound of the range.
- * @param {Node} inHighNode - The source or current upper bound of the range.
- * @param {?Node} [outLowNode=float(0)] - The target lower bound of the range.
- * @param {?Node} [outHighNode=float(1)] - The target upper bound of the range.
- * @returns {RemapNode}
+ * @param {Node} node - 要重映射的节点
+ * @param {Node} inLowNode - 源范围的下界
+ * @param {Node} inHighNode - 源范围的上界
+ * @param {?Node} [outLowNode=float(0)] - 目标范围的下界
+ * @param {?Node} [outHighNode=float(1)] - 目标范围的上界
+ * @returns {RemapNode} 创建的重映射节点实例
  */
-export const remap = /*@__PURE__*/ nodeProxy( RemapNode, null, null, { doClamp: false } ).setParameterLength( 3, 5 );
+export const remap = /*@__PURE__*/ nodeProxy(RemapNode, null, null, { doClamp: false }).setParameterLength(3, 5);
 
 /**
- * TSL function for creating a remap node, but with enabled clamping.
+ * TSL 函数：创建重映射节点（启用钳制）
  *
  * @tsl
  * @function
- * @param {Node} node - The node that should be remapped.
- * @param {Node} inLowNode - The source or current lower bound of the range.
- * @param {Node} inHighNode - The source or current upper bound of the range.
- * @param {?Node} [outLowNode=float(0)] - The target lower bound of the range.
- * @param {?Node} [outHighNode=float(1)] - The target upper bound of the range.
- * @returns {RemapNode}
+ * @param {Node} node - 要重映射的节点
+ * @param {Node} inLowNode - 源范围的下界
+ * @param {Node} inHighNode - 源范围的上界
+ * @param {?Node} [outLowNode=float(0)] - 目标范围的下界
+ * @param {?Node} [outHighNode=float(1)] - 目标范围的上界
+ * @returns {RemapNode} 创建的重映射节点实例
  */
-export const remapClamp = /*@__PURE__*/ nodeProxy( RemapNode ).setParameterLength( 3, 5 );
+export const remapClamp = /*@__PURE__*/ nodeProxy(RemapNode).setParameterLength(3, 5);
 
-addMethodChaining( 'remap', remap );
-addMethodChaining( 'remapClamp', remapClamp );
+// 添加方法链式调用支持
+addMethodChaining("remap", remap);
+addMethodChaining("remapClamp", remapClamp);
