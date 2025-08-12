@@ -1,55 +1,54 @@
-import Node from '../core/Node.js';
-import { nodeImmutable } from '../tsl/TSLBase.js';
+// 导入节点基类
+import Node from "../core/Node.js";
+// 导入不可变节点函数
+import { nodeImmutable } from "../tsl/TSLBase.js";
 
 /**
- * A node for representing the uv coordinates of points.
+ * 点UV节点 - 用于表示点的UV坐标
  *
- * Can only be used with a WebGL backend. In WebGPU, point
- * primitives always have the size of one pixel and can thus
- * can't be used as sprite-like objects that display textures.
+ * 只能与WebGL后端一起使用。在WebGPU中，点图元
+ * 始终具有一个像素的大小，因此不能用作显示纹理的
+ * 类似精灵的对象。
  *
  * @augments Node
  */
 class PointUVNode extends Node {
+  // 返回节点类型标识符
+  static get type() {
+    return "PointUVNode";
+  }
 
-	static get type() {
+  /**
+   * 构造一个新的点UV节点
+   */
+  constructor() {
+    // 调用父类构造函数，返回类型为vec2
+    super("vec2");
 
-		return 'PointUVNode';
+    /**
+     * 此标志可用于类型测试
+     *
+     * @type {boolean}
+     * @readonly
+     * @default true
+     */
+    this.isPointUVNode = true;
+  }
 
-	}
-
-	/**
-	 * Constructs a new point uv node.
-	 */
-	constructor() {
-
-		super( 'vec2' );
-
-		/**
-		 * This flag can be used for type testing.
-		 *
-		 * @type {boolean}
-		 * @readonly
-		 * @default true
-		 */
-		this.isPointUVNode = true;
-
-	}
-
-	generate( /*builder*/ ) {
-
-		return 'vec2( gl_PointCoord.x, 1.0 - gl_PointCoord.y )';
-
-	}
-
+  // 生成着色器代码
+  generate(/*builder*/) {
+    // 返回点坐标的UV，注意Y轴需要翻转（1.0 - y）
+    return "vec2( gl_PointCoord.x, 1.0 - gl_PointCoord.y )";
+  }
 }
 
+// 导出PointUVNode类作为默认导出
 export default PointUVNode;
 
 /**
- * TSL object that represents the uv coordinates of points.
+ * TSL对象 - 表示点的UV坐标
  *
  * @tsl
  * @type {PointUVNode}
  */
-export const pointUV = /*@__PURE__*/ nodeImmutable( PointUVNode );
+export const pointUV = /*@__PURE__*/ nodeImmutable(PointUVNode);

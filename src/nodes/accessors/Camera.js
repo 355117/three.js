@@ -1,156 +1,179 @@
-import { uniform } from '../core/UniformNode.js';
-import { renderGroup, sharedUniformGroup } from '../core/UniformGroupNode.js';
-import { Vector3 } from '../../math/Vector3.js';
-import { Fn } from '../tsl/TSLBase.js';
-import { uniformArray } from './UniformArrayNode.js';
-import { builtin } from './BuiltinNode.js';
+// 导入统一节点
+import { uniform } from "../core/UniformNode.js";
+// 导入统一组节点
+import { renderGroup, sharedUniformGroup } from "../core/UniformGroupNode.js";
+// 导入三维向量类
+import { Vector3 } from "../../math/Vector3.js";
+// 导入TSL函数
+import { Fn } from "../tsl/TSLBase.js";
+// 导入统一数组节点
+import { uniformArray } from "./UniformArrayNode.js";
+// 导入内置节点
+import { builtin } from "./BuiltinNode.js";
 
 /**
- * TSL object that represents the current `index` value of the camera if used ArrayCamera.
+ * 表示使用ArrayCamera时相机当前 `index` 值的TSL对象
  *
  * @tsl
  * @type {UniformNode<uint>}
  */
-export const cameraIndex = /*@__PURE__*/ uniform( 0, 'uint' ).setName( 'u_cameraIndex' ).setGroup( sharedUniformGroup( 'cameraIndex' ) ).toVarying( 'v_cameraIndex' );
+export const cameraIndex = /*@__PURE__*/ uniform(0, "uint").setName("u_cameraIndex").setGroup(sharedUniformGroup("cameraIndex")).toVarying("v_cameraIndex");
 
 /**
- * TSL object that represents the `near` value of the camera used for the current render.
+ * 表示当前渲染使用的相机 `near` 值的TSL对象
  *
  * @tsl
  * @type {UniformNode<float>}
  */
-export const cameraNear = /*@__PURE__*/ uniform( 'float' ).setName( 'cameraNear' ).setGroup( renderGroup ).onRenderUpdate( ( { camera } ) => camera.near );
+export const cameraNear = /*@__PURE__*/ uniform("float")
+  .setName("cameraNear") // 设置统一变量名称
+  .setGroup(renderGroup) // 设置为渲染组
+  .onRenderUpdate(({ camera }) => camera.near); // 渲染时更新为相机的近平面值
 
 /**
- * TSL object that represents the `far` value of the camera used for the current render.
+ * 表示当前渲染使用的相机 `far` 值的TSL对象
  *
  * @tsl
  * @type {UniformNode<float>}
  */
-export const cameraFar = /*@__PURE__*/ uniform( 'float' ).setName( 'cameraFar' ).setGroup( renderGroup ).onRenderUpdate( ( { camera } ) => camera.far );
+export const cameraFar = /*@__PURE__*/ uniform("float")
+  .setName("cameraFar") // 设置统一变量名称
+  .setGroup(renderGroup) // 设置为渲染组
+  .onRenderUpdate(({ camera }) => camera.far); // 渲染时更新为相机的远平面值
 
 /**
- * TSL object that represents the projection matrix of the camera used for the current render.
+ * 表示当前渲染使用的相机投影矩阵的TSL对象
  *
  * @tsl
  * @type {UniformNode<mat4>}
  */
-export const cameraProjectionMatrix = /*@__PURE__*/ ( Fn( ( { camera } ) => {
+export const cameraProjectionMatrix = /*@__PURE__*/ Fn(({ camera }) => {
+  let cameraProjectionMatrix;
 
-	let cameraProjectionMatrix;
+  // 如果是数组相机且包含子相机
+  if (camera.isArrayCamera && camera.cameras.length > 0) {
+    const matrices = []; // 存储所有子相机的投影矩阵
 
-	if ( camera.isArrayCamera && camera.cameras.length > 0 ) {
+    // 遍历所有子相机，收集投影矩阵
+    for (const subCamera of camera.cameras) {
+      matrices.push(subCamera.projectionMatrix);
+    }
 
-		const matrices = [];
+    // 创建投影矩阵数组的统一变量
+    const cameraProjectionMatrices = uniformArray(matrices).setGroup(renderGroup).setName("cameraProjectionMatrices");
 
-		for ( const subCamera of camera.cameras ) {
+    // 根据相机类型选择合适的索引来获取投影矩阵
+    cameraProjectionMatrix = cameraProjectionMatrices.element(camera.isMultiViewCamera ? builtin("gl_ViewID_OVR") : cameraIndex).toVar("cameraProjectionMatrix");
+  } else {
+    // 对于单个相机，直接创建投影矩阵统一变量
+    cameraProjectionMatrix = uniform("mat4")
+      .setName("cameraProjectionMatrix") // 设置统一变量名称
+      .setGroup(renderGroup) // 设置为渲染组
+      .onRenderUpdate(({ camera }) => camera.projectionMatrix); // 渲染时更新为相机的投影矩阵
+  }
 
-			matrices.push( subCamera.projectionMatrix );
-
-		}
-
-		const cameraProjectionMatrices = uniformArray( matrices ).setGroup( renderGroup ).setName( 'cameraProjectionMatrices' );
-
-		cameraProjectionMatrix = cameraProjectionMatrices.element( camera.isMultiViewCamera ? builtin( 'gl_ViewID_OVR' ) : cameraIndex ).toVar( 'cameraProjectionMatrix' );
-
-	} else {
-
-		cameraProjectionMatrix = uniform( 'mat4' ).setName( 'cameraProjectionMatrix' ).setGroup( renderGroup ).onRenderUpdate( ( { camera } ) => camera.projectionMatrix );
-
-	}
-
-	return cameraProjectionMatrix;
-
-} ).once() )();
+  return cameraProjectionMatrix;
+}).once()(); // 使用once()确保函数只执行一次并立即调用
 
 /**
- * TSL object that represents the inverse projection matrix of the camera used for the current render.
+ * 表示当前渲染使用的相机投影矩阵逆矩阵的TSL对象
  *
  * @tsl
  * @type {UniformNode<mat4>}
  */
-export const cameraProjectionMatrixInverse = /*@__PURE__*/ ( Fn( ( { camera } ) => {
+export const cameraProjectionMatrixInverse = /*@__PURE__*/ Fn(({ camera }) => {
+  let cameraProjectionMatrixInverse;
 
-	let cameraProjectionMatrixInverse;
+  // 如果是数组相机且包含子相机
+  if (camera.isArrayCamera && camera.cameras.length > 0) {
+    const matrices = []; // 存储所有子相机的投影矩阵逆矩阵
 
-	if ( camera.isArrayCamera && camera.cameras.length > 0 ) {
+    // 遍历所有子相机，收集投影矩阵逆矩阵
+    for (const subCamera of camera.cameras) {
+      matrices.push(subCamera.projectionMatrixInverse);
+    }
 
-		const matrices = [];
+    // 创建投影矩阵逆矩阵数组的统一变量
+    const cameraProjectionMatricesInverse = uniformArray(matrices).setGroup(renderGroup).setName("cameraProjectionMatricesInverse");
 
-		for ( const subCamera of camera.cameras ) {
+    // 根据相机类型选择合适的索引来获取投影矩阵逆矩阵
+    cameraProjectionMatrixInverse = cameraProjectionMatricesInverse
+      .element(camera.isMultiViewCamera ? builtin("gl_ViewID_OVR") : cameraIndex)
+      .toVar("cameraProjectionMatrixInverse");
+  } else {
+    // 对于单个相机，直接创建投影矩阵逆矩阵统一变量
+    cameraProjectionMatrixInverse = uniform("mat4")
+      .setName("cameraProjectionMatrixInverse") // 设置统一变量名称
+      .setGroup(renderGroup) // 设置为渲染组
+      .onRenderUpdate(({ camera }) => camera.projectionMatrixInverse); // 渲染时更新为相机的投影矩阵逆矩阵
+  }
 
-			matrices.push( subCamera.projectionMatrixInverse );
-
-		}
-
-		const cameraProjectionMatricesInverse = uniformArray( matrices ).setGroup( renderGroup ).setName( 'cameraProjectionMatricesInverse' );
-
-		cameraProjectionMatrixInverse = cameraProjectionMatricesInverse.element( camera.isMultiViewCamera ? builtin( 'gl_ViewID_OVR' ) : cameraIndex ).toVar( 'cameraProjectionMatrixInverse' );
-
-	} else {
-
-		cameraProjectionMatrixInverse = uniform( 'mat4' ).setName( 'cameraProjectionMatrixInverse' ).setGroup( renderGroup ).onRenderUpdate( ( { camera } ) => camera.projectionMatrixInverse );
-
-	}
-
-	return cameraProjectionMatrixInverse;
-
-} ).once() )();
+  return cameraProjectionMatrixInverse;
+}).once()(); // 使用once()确保函数只执行一次并立即调用
 
 /**
- * TSL object that represents the view matrix of the camera used for the current render.
+ * 表示当前渲染使用的相机视图矩阵的TSL对象
  *
  * @tsl
  * @type {UniformNode<mat4>}
  */
-export const cameraViewMatrix = /*@__PURE__*/ ( Fn( ( { camera } ) => {
+export const cameraViewMatrix = /*@__PURE__*/ Fn(({ camera }) => {
+  let cameraViewMatrix;
 
-	let cameraViewMatrix;
+  // 如果是数组相机且包含子相机
+  if (camera.isArrayCamera && camera.cameras.length > 0) {
+    const matrices = []; // 存储所有子相机的世界矩阵逆矩阵（视图矩阵）
 
-	if ( camera.isArrayCamera && camera.cameras.length > 0 ) {
+    // 遍历所有子相机，收集世界矩阵逆矩阵
+    for (const subCamera of camera.cameras) {
+      matrices.push(subCamera.matrixWorldInverse);
+    }
 
-		const matrices = [];
+    // 创建视图矩阵数组的统一变量
+    const cameraViewMatrices = uniformArray(matrices).setGroup(renderGroup).setName("cameraViewMatrices");
 
-		for ( const subCamera of camera.cameras ) {
+    // 根据相机类型选择合适的索引来获取视图矩阵
+    cameraViewMatrix = cameraViewMatrices.element(camera.isMultiViewCamera ? builtin("gl_ViewID_OVR") : cameraIndex).toVar("cameraViewMatrix");
+  } else {
+    // 对于单个相机，直接创建视图矩阵统一变量
+    cameraViewMatrix = uniform("mat4")
+      .setName("cameraViewMatrix") // 设置统一变量名称
+      .setGroup(renderGroup) // 设置为渲染组
+      .onRenderUpdate(({ camera }) => camera.matrixWorldInverse); // 渲染时更新为相机的世界矩阵逆矩阵
+  }
 
-			matrices.push( subCamera.matrixWorldInverse );
-
-		}
-
-		const cameraViewMatrices = uniformArray( matrices ).setGroup( renderGroup ).setName( 'cameraViewMatrices' );
-
-		cameraViewMatrix = cameraViewMatrices.element( camera.isMultiViewCamera ? builtin( 'gl_ViewID_OVR' ) : cameraIndex ).toVar( 'cameraViewMatrix' );
-
-	} else {
-
-		cameraViewMatrix = uniform( 'mat4' ).setName( 'cameraViewMatrix' ).setGroup( renderGroup ).onRenderUpdate( ( { camera } ) => camera.matrixWorldInverse );
-
-	}
-
-	return cameraViewMatrix;
-
-} ).once() )();
+  return cameraViewMatrix;
+}).once()(); // 使用once()确保函数只执行一次并立即调用
 
 /**
- * TSL object that represents the world matrix of the camera used for the current render.
+ * 表示当前渲染使用的相机世界矩阵的TSL对象
  *
  * @tsl
  * @type {UniformNode<mat4>}
  */
-export const cameraWorldMatrix = /*@__PURE__*/ uniform( 'mat4' ).setName( 'cameraWorldMatrix' ).setGroup( renderGroup ).onRenderUpdate( ( { camera } ) => camera.matrixWorld );
+export const cameraWorldMatrix = /*@__PURE__*/ uniform("mat4")
+  .setName("cameraWorldMatrix") // 设置统一变量名称
+  .setGroup(renderGroup) // 设置为渲染组
+  .onRenderUpdate(({ camera }) => camera.matrixWorld); // 渲染时更新为相机的世界矩阵
 
 /**
- * TSL object that represents the normal matrix of the camera used for the current render.
+ * 表示当前渲染使用的相机法线矩阵的TSL对象
  *
  * @tsl
  * @type {UniformNode<mat3>}
  */
-export const cameraNormalMatrix = /*@__PURE__*/ uniform( 'mat3' ).setName( 'cameraNormalMatrix' ).setGroup( renderGroup ).onRenderUpdate( ( { camera } ) => camera.normalMatrix );
+export const cameraNormalMatrix = /*@__PURE__*/ uniform("mat3")
+  .setName("cameraNormalMatrix") // 设置统一变量名称
+  .setGroup(renderGroup) // 设置为渲染组
+  .onRenderUpdate(({ camera }) => camera.normalMatrix); // 渲染时更新为相机的法线矩阵
 
 /**
- * TSL object that represents the position in world space of the camera used for the current render.
+ * 表示当前渲染使用的相机在世界空间中位置的TSL对象
  *
  * @tsl
  * @type {UniformNode<vec3>}
  */
-export const cameraPosition = /*@__PURE__*/ uniform( new Vector3() ).setName( 'cameraPosition' ).setGroup( renderGroup ).onRenderUpdate( ( { camera }, self ) => self.value.setFromMatrixPosition( camera.matrixWorld ) );
+export const cameraPosition = /*@__PURE__*/ uniform(new Vector3())
+  .setName("cameraPosition") // 设置统一变量名称
+  .setGroup(renderGroup) // 设置为渲染组
+  .onRenderUpdate(({ camera }, self) => self.value.setFromMatrixPosition(camera.matrixWorld)); // 渲染时从相机世界矩阵中提取位置

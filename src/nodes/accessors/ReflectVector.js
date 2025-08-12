@@ -1,36 +1,40 @@
-import { cameraViewMatrix } from './Camera.js';
-import { normalView } from './Normal.js';
-import { positionViewDirection } from './Position.js';
-import { materialRefractionRatio } from './MaterialProperties.js';
+// 导入相机视图矩阵
+import { cameraViewMatrix } from "./Camera.js";
+// 导入视图法线
+import { normalView } from "./Normal.js";
+// 导入位置视图方向
+import { positionViewDirection } from "./Position.js";
+// 导入材质折射比率
+import { materialRefractionRatio } from "./MaterialProperties.js";
 
 /**
- * The reflect vector in view space.
+ * TSL对象 - 视图空间中的反射向量
  *
  * @tsl
  * @type {Node<vec3>}
  */
-export const reflectView = /*@__PURE__*/ positionViewDirection.negate().reflect( normalView );
+export const reflectView = /*@__PURE__*/ positionViewDirection.negate().reflect(normalView);
 
 /**
- * The refract vector in view space.
+ * TSL对象 - 视图空间中的折射向量
  *
  * @tsl
  * @type {Node<vec3>}
  */
-export const refractView = /*@__PURE__*/ positionViewDirection.negate().refract( normalView, materialRefractionRatio );
+export const refractView = /*@__PURE__*/ positionViewDirection.negate().refract(normalView, materialRefractionRatio);
 
 /**
- * Used for sampling cube maps when using cube reflection mapping.
+ * TSL对象 - 用于立方体反射映射时采样立方体贴图
  *
  * @tsl
  * @type {Node<vec3>}
  */
-export const reflectVector = /*@__PURE__*/ reflectView.transformDirection( cameraViewMatrix ).toVar( 'reflectVector' );
+export const reflectVector = /*@__PURE__*/ reflectView.transformDirection(cameraViewMatrix).toVar("reflectVector");
 
 /**
- * Used for sampling cube maps when using cube refraction mapping.
+ * TSL对象 - 用于立方体折射映射时采样立方体贴图
  *
  * @tsl
  * @type {Node<vec3>}
  */
-export const refractVector = /*@__PURE__*/ refractView.transformDirection( cameraViewMatrix ).toVar( 'reflectVector' );
+export const refractVector = /*@__PURE__*/ refractView.transformDirection(cameraViewMatrix).toVar("reflectVector");

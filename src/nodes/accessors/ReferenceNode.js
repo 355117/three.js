@@ -1,423 +1,395 @@
-import Node from '../core/Node.js';
-import { NodeUpdateType } from '../core/constants.js';
-import { uniform } from '../core/UniformNode.js';
-import { texture } from './TextureNode.js';
-import { cubeTexture } from './CubeTextureNode.js';
-import { buffer } from './BufferNode.js';
-import { nodeObject } from '../tsl/TSLBase.js';
-import { uniformArray } from './UniformArrayNode.js';
-import ArrayElementNode from '../utils/ArrayElementNode.js';
+// 导入节点基类
+import Node from "../core/Node.js";
+// 导入节点更新类型常量
+import { NodeUpdateType } from "../core/constants.js";
+// 导入统一变量函数
+import { uniform } from "../core/UniformNode.js";
+// 导入纹理节点函数
+import { texture } from "./TextureNode.js";
+// 导入立方体纹理节点函数
+import { cubeTexture } from "./CubeTextureNode.js";
+// 导入缓冲区节点函数
+import { buffer } from "./BufferNode.js";
+// 导入节点对象包装器
+import { nodeObject } from "../tsl/TSLBase.js";
+// 导入统一数组节点函数
+import { uniformArray } from "./UniformArrayNode.js";
+// 导入数组元素节点
+import ArrayElementNode from "../utils/ArrayElementNode.js";
 
-// TODO: Avoid duplicated code and ues only ReferenceBaseNode or ReferenceNode
+// TODO: 避免重复代码，只使用 ReferenceBaseNode 或 ReferenceNode
 
 /**
- * This class is only relevant if the referenced property is array-like.
- * In this case, `ReferenceElementNode` allows to refer to a specific
- * element inside the data structure via an index.
+ * 引用元素节点 - 仅在引用的属性是类数组时相关
+ * 在这种情况下，`ReferenceElementNode` 允许通过索引引用数据结构内的特定元素
  *
  * @augments ArrayElementNode
  */
 class ReferenceElementNode extends ArrayElementNode {
+  // 返回节点类型标识符
+  static get type() {
+    return "ReferenceElementNode";
+  }
 
-	static get type() {
+  /**
+   * 构造一个新的引用元素节点
+   *
+   * @param {?ReferenceNode} referenceNode - 引用节点
+   * @param {Node} indexNode - 定义元素访问的索引节点
+   */
+  constructor(referenceNode, indexNode) {
+    // 调用父类构造函数
+    super(referenceNode, indexNode);
 
-		return 'ReferenceElementNode';
+    /**
+     * 类似于 {@link ReferenceNode#reference}，一个额外的属性引用当前节点
+     *
+     * @type {?ReferenceNode}
+     * @default null
+     */
+    this.referenceNode = referenceNode;
 
-	}
+    /**
+     * 此标志可用于类型测试
+     *
+     * @type {boolean}
+     * @readonly
+     * @default true
+     */
+    this.isReferenceElementNode = true;
+  }
 
-	/**
-	 * Constructs a new reference element node.
-	 *
-	 * @param {?ReferenceNode} referenceNode - The reference node.
-	 * @param {Node} indexNode - The index node that defines the element access.
-	 */
-	constructor( referenceNode, indexNode ) {
+  /**
+   * 重写此方法，因为节点类型从引用节点的统一变量类型推断
+   *
+   * @return {string} 节点类型
+   */
+  getNodeType() {
+    return this.referenceNode.uniformType;
+  }
 
-		super( referenceNode, indexNode );
+  // 生成着色器代码
+  generate(builder) {
+    // 调用父类生成方法
+    const snippet = super.generate(builder);
+    // 获取数组类型和元素类型
+    const arrayType = this.referenceNode.getNodeType();
+    const elementType = this.getNodeType();
 
-		/**
-		 * Similar to {@link ReferenceNode#reference}, an additional
-		 * property references to the current node.
-		 *
-		 * @type {?ReferenceNode}
-		 * @default null
-		 */
-		this.referenceNode = referenceNode;
-
-		/**
-		 * This flag can be used for type testing.
-		 *
-		 * @type {boolean}
-		 * @readonly
-		 * @default true
-		 */
-		this.isReferenceElementNode = true;
-
-	}
-
-	/**
-	 * This method is overwritten since the node type is inferred from
-	 * the uniform type of the reference node.
-	 *
-	 * @return {string} The node type.
-	 */
-	getNodeType() {
-
-		return this.referenceNode.uniformType;
-
-	}
-
-	generate( builder ) {
-
-		const snippet = super.generate( builder );
-		const arrayType = this.referenceNode.getNodeType();
-		const elementType = this.getNodeType();
-
-		return builder.format( snippet, arrayType, elementType );
-
-	}
-
+    // 格式化并返回代码片段
+    return builder.format(snippet, arrayType, elementType);
+  }
 }
 
 /**
- * This type of node establishes a reference to a property of another object.
- * In this way, the value of the node is automatically linked to the value of
- * referenced object. Reference nodes internally represent the linked value
- * as a uniform.
+ * 引用节点 - 建立对另一个对象属性引用的节点类型
+ * 通过这种方式，节点的值自动链接到引用对象的值
+ * 引用节点内部将链接的值表示为统一变量
  *
  * @augments Node
  */
 class ReferenceNode extends Node {
-
-	static get type() {
-
-		return 'ReferenceNode';
-
-	}
-
-	/**
-	 * Constructs a new reference node.
-	 *
-	 * @param {string} property - The name of the property the node refers to.
-	 * @param {string} uniformType - The uniform type that should be used to represent the property value.
-	 * @param {?Object} [object=null] - The object the property belongs to.
-	 * @param {?number} [count=null] - When the linked property is an array-like, this parameter defines its length.
-	 */
-	constructor( property, uniformType, object = null, count = null ) {
-
-		super();
-
-		/**
-		 * The name of the property the node refers to.
-		 *
-		 * @type {string}
-		 */
-		this.property = property;
-
-		/**
-		 * The uniform type that should be used to represent the property value.
-		 *
-		 * @type {string}
-		 */
-		this.uniformType = uniformType;
-
-		/**
-		 * The object the property belongs to.
-		 *
-		 * @type {?Object}
-		 * @default null
-		 */
-		this.object = object;
-
-		/**
-		 * When the linked property is an array, this parameter defines its length.
-		 *
-		 * @type {?number}
-		 * @default null
-		 */
-		this.count = count;
-
-		/**
-		 * The property name might have dots so nested properties can be referred.
-		 * The hierarchy of the names is stored inside this array.
-		 *
-		 * @type {Array<string>}
-		 */
-		this.properties = property.split( '.' );
-
-		/**
-		 * Points to the current referred object. This property exists next to {@link ReferenceNode#object}
-		 * since the final reference might be updated from calling code.
-		 *
-		 * @type {?Object}
-		 * @default null
-		 */
-		this.reference = object;
-
-		/**
-		 * The uniform node that holds the value of the reference node.
-		 *
-		 * @type {UniformNode}
-		 * @default null
-		 */
-		this.node = null;
-
-		/**
-		 * The uniform group of the internal uniform.
-		 *
-		 * @type {UniformGroupNode}
-		 * @default null
-		 */
-		this.group = null;
-
-		/**
-		 * An optional label of the internal uniform node.
-		 *
-		 * @type {?string}
-		 * @default null
-		 */
-		this.name = null;
-
-		/**
-		 * Overwritten since reference nodes are updated per object.
-		 *
-		 * @type {string}
-		 * @default 'object'
-		 */
-		this.updateType = NodeUpdateType.OBJECT;
-
-	}
-
-	/**
-	 * When the referred property is array-like, this method can be used
-	 * to access elements via an index node.
-	 *
-	 * @param {IndexNode} indexNode - indexNode.
-	 * @return {ReferenceElementNode} A reference to an element.
-	 */
-	element( indexNode ) {
-
-		return nodeObject( new ReferenceElementNode( this, nodeObject( indexNode ) ) );
-
-	}
-
-	/**
-	 * Sets the uniform group for this reference node.
-	 *
-	 * @param {UniformGroupNode} group - The uniform group to set.
-	 * @return {ReferenceNode} A reference to this node.
-	 */
-	setGroup( group ) {
-
-		this.group = group;
-
-		return this;
-
-	}
-
-	/**
-	 * Sets the name for the internal uniform.
-	 *
-	 * @param {string} name - The label to set.
-	 * @return {ReferenceNode} A reference to this node.
-	 */
-	setName( name ) {
-
-		this.name = name;
-
-		return this;
-
-	}
-
-	/**
-	 * Sets the label for the internal uniform.
-	 *
-	 * @deprecated
-	 * @param {string} name - The label to set.
-	 * @return {ReferenceNode} A reference to this node.
-	 */
-	label( name ) {
-
-		console.warn( 'THREE.TSL: "label()" has been deprecated. Use "setName()" instead.' ); // @deprecated r179
-
-		return this.setName( name );
-
-	}
-
-	/**
-	 * Sets the node type which automatically defines the internal
-	 * uniform type.
-	 *
-	 * @param {string} uniformType - The type to set.
-	 */
-	setNodeType( uniformType ) {
-
-		let node = null;
-
-		if ( this.count !== null ) {
-
-			node = buffer( null, uniformType, this.count );
-
-		} else if ( Array.isArray( this.getValueFromReference() ) ) {
-
-			node = uniformArray( null, uniformType );
-
-		} else if ( uniformType === 'texture' ) {
-
-			node = texture( null );
-
-		} else if ( uniformType === 'cubeTexture' ) {
-
-			node = cubeTexture( null );
-
-		} else {
-
-			node = uniform( null, uniformType );
-
-		}
-
-		if ( this.group !== null ) {
-
-			node.setGroup( this.group );
-
-		}
-
-		if ( this.name !== null ) node.setName( this.name );
-
-		this.node = node.getSelf();
-
-	}
-
-	/**
-	 * This method is overwritten since the node type is inferred from
-	 * the type of the reference node.
-	 *
-	 * @param {NodeBuilder} builder - The current node builder.
-	 * @return {string} The node type.
-	 */
-	getNodeType( builder ) {
-
-		if ( this.node === null ) {
-
-			this.updateReference( builder );
-			this.updateValue();
-
-		}
-
-		return this.node.getNodeType( builder );
-
-	}
-
-	/**
-	 * Returns the property value from the given referred object.
-	 *
-	 * @param {Object} [object=this.reference] - The object to retrieve the property value from.
-	 * @return {any} The value.
-	 */
-	getValueFromReference( object = this.reference ) {
-
-		const { properties } = this;
-
-		let value = object[ properties[ 0 ] ];
-
-		for ( let i = 1; i < properties.length; i ++ ) {
-
-			value = value[ properties[ i ] ];
-
-		}
-
-		return value;
-
-	}
-
-	/**
-	 * Allows to update the reference based on the given state. The state is only
-	 * evaluated {@link ReferenceNode#object} is not set.
-	 *
-	 * @param {(NodeFrame|NodeBuilder)} state - The current state.
-	 * @return {Object} The updated reference.
-	 */
-	updateReference( state ) {
-
-		this.reference = this.object !== null ? this.object : state.object;
-
-		return this.reference;
-
-	}
-
-	/**
-	 * The output of the reference node is the internal uniform node.
-	 *
-	 * @param {NodeBuilder} builder - The current node builder.
-	 * @return {UniformNode} The output node.
-	 */
-	setup( /* builder */ ) {
-
-		this.updateValue();
-
-		return this.node;
-
-	}
-
-	/**
-	 * Overwritten to update the internal uniform value.
-	 *
-	 * @param {NodeFrame} frame - A reference to the current node frame.
-	 */
-	update( /*frame*/ ) {
-
-		this.updateValue();
-
-	}
-
-	/**
-	 * Retrieves the value from the referred object property and uses it
-	 * to updated the internal uniform.
-	 */
-	updateValue() {
-
-		if ( this.node === null ) this.setNodeType( this.uniformType );
-
-		const value = this.getValueFromReference();
-
-		if ( Array.isArray( value ) ) {
-
-			this.node.array = value;
-
-		} else {
-
-			this.node.value = value;
-
-		}
-
-	}
-
+  // 返回节点类型标识符
+  static get type() {
+    return "ReferenceNode";
+  }
+
+  /**
+   * 构造一个新的引用节点
+   *
+   * @param {string} property - 节点引用的属性名称
+   * @param {string} uniformType - 用于表示属性值的统一变量类型
+   * @param {?Object} [object=null] - 属性所属的对象
+   * @param {?number} [count=null] - 当链接的属性是类数组时，此参数定义其长度
+   */
+  constructor(property, uniformType, object = null, count = null) {
+    // 调用父类构造函数
+    super();
+
+    /**
+     * 节点引用的属性名称
+     *
+     * @type {string}
+     */
+    this.property = property;
+
+    /**
+     * 用于表示属性值的统一变量类型
+     *
+     * @type {string}
+     */
+    this.uniformType = uniformType;
+
+    /**
+     * 属性所属的对象
+     *
+     * @type {?Object}
+     * @default null
+     */
+    this.object = object;
+
+    /**
+     * 当链接的属性是数组时，此参数定义其长度
+     *
+     * @type {?number}
+     * @default null
+     */
+    this.count = count;
+
+    /**
+     * 属性名称可能包含点，因此可以引用嵌套属性
+     * 名称的层次结构存储在此数组中
+     *
+     * @type {Array<string>}
+     */
+    this.properties = property.split(".");
+
+    /**
+     * 指向当前引用的对象。此属性与 {@link ReferenceNode#object} 并存
+     * 因为最终引用可能会从调用代码中更新
+     *
+     * @type {?Object}
+     * @default null
+     */
+    this.reference = object;
+
+    /**
+     * 保存引用节点值的统一变量节点
+     *
+     * @type {UniformNode}
+     * @default null
+     */
+    this.node = null;
+
+    /**
+     * 内部统一变量的统一变量组
+     *
+     * @type {UniformGroupNode}
+     * @default null
+     */
+    this.group = null;
+
+    /**
+     * 内部统一变量节点的可选标签
+     *
+     * @type {?string}
+     * @default null
+     */
+    this.name = null;
+
+    /**
+     * 重写更新类型，因为引用节点按对象更新
+     *
+     * @type {string}
+     * @default 'object'
+     */
+    this.updateType = NodeUpdateType.OBJECT;
+  }
+
+  /**
+   * 当引用的属性是类数组时，可以使用此方法通过索引节点访问元素
+   *
+   * @param {IndexNode} indexNode - 索引节点
+   * @return {ReferenceElementNode} 对元素的引用
+   */
+  element(indexNode) {
+    return nodeObject(new ReferenceElementNode(this, nodeObject(indexNode)));
+  }
+
+  /**
+   * 为此引用节点设置统一变量组
+   *
+   * @param {UniformGroupNode} group - 要设置的统一变量组
+   * @return {ReferenceNode} 对此节点的引用
+   */
+  setGroup(group) {
+    this.group = group;
+
+    return this;
+  }
+
+  /**
+   * 为内部统一变量设置名称
+   *
+   * @param {string} name - 要设置的标签
+   * @return {ReferenceNode} 对此节点的引用
+   */
+  setName(name) {
+    this.name = name;
+
+    return this;
+  }
+
+  /**
+   * 为内部统一变量设置标签
+   *
+   * @deprecated
+   * @param {string} name - 要设置的标签
+   * @return {ReferenceNode} 对此节点的引用
+   */
+  label(name) {
+    console.warn('THREE.TSL: "label()" has been deprecated. Use "setName()" instead.'); // @deprecated r179
+
+    return this.setName(name);
+  }
+
+  /**
+   * 设置节点类型，自动定义内部统一变量类型
+   *
+   * @param {string} uniformType - 要设置的类型
+   */
+  setNodeType(uniformType) {
+    let node = null;
+
+    // 根据不同情况创建相应的节点类型
+    if (this.count !== null) {
+      // 如果有计数，创建缓冲区节点
+      node = buffer(null, uniformType, this.count);
+    } else if (Array.isArray(this.getValueFromReference())) {
+      // 如果引用值是数组，创建统一数组节点
+      node = uniformArray(null, uniformType);
+    } else if (uniformType === "texture") {
+      // 如果是纹理类型，创建纹理节点
+      node = texture(null);
+    } else if (uniformType === "cubeTexture") {
+      // 如果是立方体纹理类型，创建立方体纹理节点
+      node = cubeTexture(null);
+    } else {
+      // 其他情况创建普通统一变量节点
+      node = uniform(null, uniformType);
+    }
+
+    // 如果有统一变量组，设置给节点
+    if (this.group !== null) {
+      node.setGroup(this.group);
+    }
+
+    // 如果有名称，设置给节点
+    if (this.name !== null) node.setName(this.name);
+
+    // 保存节点引用
+    this.node = node.getSelf();
+  }
+
+  /**
+   * 重写此方法，因为节点类型从引用节点的类型推断
+   *
+   * @param {NodeBuilder} builder - 当前节点构建器
+   * @return {string} 节点类型
+   */
+  getNodeType(builder) {
+    // 如果节点为空，先更新引用和值
+    if (this.node === null) {
+      this.updateReference(builder);
+      this.updateValue();
+    }
+
+    // 返回内部节点的类型
+    return this.node.getNodeType(builder);
+  }
+
+  /**
+   * 从给定的引用对象返回属性值
+   *
+   * @param {Object} [object=this.reference] - 要从中检索属性值的对象
+   * @return {any} 属性值
+   */
+  getValueFromReference(object = this.reference) {
+    // 获取属性层次结构
+    const { properties } = this;
+
+    // 获取第一级属性值
+    let value = object[properties[0]];
+
+    // 遍历嵌套属性
+    for (let i = 1; i < properties.length; i++) {
+      value = value[properties[i]];
+    }
+
+    return value;
+  }
+
+  /**
+   * 允许根据给定状态更新引用。仅当 {@link ReferenceNode#object} 未设置时才评估状态
+   *
+   * @param {(NodeFrame|NodeBuilder)} state - 当前状态
+   * @return {Object} 更新后的引用
+   */
+  updateReference(state) {
+    // 如果设置了对象则使用设置的对象，否则使用状态中的对象
+    this.reference = this.object !== null ? this.object : state.object;
+
+    return this.reference;
+  }
+
+  /**
+   * 引用节点的输出是内部统一变量节点
+   *
+   * @param {NodeBuilder} builder - 当前节点构建器
+   * @return {UniformNode} 输出节点
+   */
+  setup(/* builder */) {
+    // 更新值并返回内部节点
+    this.updateValue();
+
+    return this.node;
+  }
+
+  /**
+   * 重写以更新内部统一变量值
+   *
+   * @param {NodeFrame} frame - 对当前节点帧的引用
+   */
+  update(/*frame*/) {
+    // 更新统一变量值
+    this.updateValue();
+  }
+
+  /**
+   * 从引用的对象属性检索值并使用它来更新内部统一变量
+   */
+  updateValue() {
+    // 如果节点为空，先设置节点类型
+    if (this.node === null) this.setNodeType(this.uniformType);
+
+    // 从引用获取值
+    const value = this.getValueFromReference();
+
+    // 根据值类型设置统一变量
+    if (Array.isArray(value)) {
+      // 如果是数组，设置array属性
+      this.node.array = value;
+    } else {
+      // 否则设置value属性
+      this.node.value = value;
+    }
+  }
 }
 
+// 导出ReferenceNode类作为默认导出
 export default ReferenceNode;
 
 /**
- * TSL function for creating a reference node.
+ * TSL函数 - 用于创建引用节点
  *
  * @tsl
  * @function
- * @param {string} name - The name of the property the node refers to.
- * @param {string} type - The uniform type that should be used to represent the property value.
- * @param {?Object} [object] - The object the property belongs to.
+ * @param {string} name - 节点引用的属性名称
+ * @param {string} type - 用于表示属性值的统一变量类型
+ * @param {?Object} [object] - 属性所属的对象
  * @returns {ReferenceNode}
  */
-export const reference = ( name, type, object ) => nodeObject( new ReferenceNode( name, type, object ) );
+export const reference = (name, type, object) => nodeObject(new ReferenceNode(name, type, object));
 
 /**
- * TSL function for creating a reference node. Use this function if you want need a reference
- * to an array-like property that should be represented as a uniform buffer.
+ * TSL函数 - 用于创建引用节点。如果需要引用应表示为统一缓冲区的类数组属性，请使用此函数
  *
  * @tsl
  * @function
- * @param {string} name - The name of the property the node refers to.
- * @param {string} type - The uniform type that should be used to represent the property value.
- * @param {number} count - The number of value inside the array-like object.
- * @param {Object} object - An array-like object the property belongs to.
+ * @param {string} name - 节点引用的属性名称
+ * @param {string} type - 用于表示属性值的统一变量类型
+ * @param {number} count - 类数组对象内的值数量
+ * @param {Object} object - 属性所属的类数组对象
  * @returns {ReferenceNode}
  */
-export const referenceBuffer = ( name, type, count, object ) => nodeObject( new ReferenceNode( name, type, object, count ) );
+export const referenceBuffer = (name, type, count, object) => nodeObject(new ReferenceNode(name, type, object, count));

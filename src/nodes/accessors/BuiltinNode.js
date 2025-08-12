@@ -1,63 +1,62 @@
-import Node from '../core/Node.js';
-import { nodeProxy } from '../tsl/TSLBase.js';
+// 导入节点基类
+import Node from "../core/Node.js";
+// 导入TSL基础函数
+import { nodeProxy } from "../tsl/TSLBase.js";
 
 /**
- * The node allows to set values for built-in shader variables. That is
- * required for features like hardware-accelerated vertex clipping.
+ * 该节点允许为内置着色器变量设置值。
+ * 这对于硬件加速顶点裁剪等功能是必需的。
  *
  * @augments Node
  */
 class BuiltinNode extends Node {
+  /**
+   * 构造一个新的内置节点
+   *
+   * @param {string} name - 内置着色器变量的名称
+   */
+  constructor(name) {
+    // 调用父类构造函数，默认类型为float
+    super("float");
 
-	/**
-	 * Constructs a new builtin node.
-	 *
-	 * @param {string} name - The name of the built-in shader variable.
-	 */
-	constructor( name ) {
+    /**
+     * 内置着色器变量的名称
+     *
+     * @type {string}
+     */
+    this.name = name;
 
-		super( 'float' );
+    /**
+     * 此标志可用于类型测试
+     *
+     * @type {boolean}
+     * @readonly
+     * @default true
+     */
+    this.isBuiltinNode = true;
+  }
 
-		/**
-		 * The name of the built-in shader variable.
-		 *
-		 * @type {string}
-		 */
-		this.name = name;
-
-		/**
-		 * This flag can be used for type testing.
-		 *
-		 * @type {boolean}
-		 * @readonly
-		 * @default true
-		 */
-		this.isBuiltinNode = true;
-
-	}
-
-	/**
-	 * Generates the code snippet of the builtin node.
-	 *
-	 * @param {NodeBuilder} builder - The current node builder.
-	 * @return {string} The generated code snippet.
-	 */
-	generate( /* builder */ ) {
-
-		return this.name;
-
-	}
-
+  /**
+   * 生成内置节点的代码片段
+   *
+   * @param {NodeBuilder} builder - 当前节点构建器
+   * @return {string} 生成的代码片段
+   */
+  generate(/* builder */) {
+    // 直接返回内置变量名称
+    return this.name;
+  }
 }
 
+// 导出BuiltinNode类作为默认导出
 export default BuiltinNode;
 
 /**
- * TSL function for creating a builtin node.
+ * 用于创建内置节点的TSL函数
  *
  * @tsl
  * @function
- * @param {string} name - The name of the built-in shader variable.
+ * @param {string} name - 内置着色器变量的名称
  * @returns {BuiltinNode}
  */
-export const builtin = nodeProxy( BuiltinNode ).setParameterLength( 1 );
+export const builtin = nodeProxy(BuiltinNode).setParameterLength(1);

@@ -1,77 +1,72 @@
-import ReferenceNode from './ReferenceNode.js';
-import { nodeObject } from '../tsl/TSLBase.js';
+// 导入引用节点基类
+import ReferenceNode from "./ReferenceNode.js";
+// 导入节点对象包装器
+import { nodeObject } from "../tsl/TSLBase.js";
 
 /**
- * A special type of reference node that allows to link values in
- * `userData` fields to node objects.
+ * 用户数据节点 - 一种特殊的引用节点类型，允许将 `userData` 字段中的值链接到节点对象
  * ```js
- * sprite.userData.rotation = 1; // stores individual rotation per sprite
+ * sprite.userData.rotation = 1; // 为每个精灵存储单独的旋转值
  *
  * const material = new THREE.SpriteNodeMaterial();
  * material.rotationNode = userData( 'rotation', 'float' );
  * ```
- * Since `UserDataNode` is extended from {@link ReferenceNode}, the node value
- * will automatically be updated when the `rotation` user data field changes.
+ * 由于 `UserDataNode` 继承自 {@link ReferenceNode}，当 `rotation` 用户数据字段改变时，
+ * 节点值将自动更新。
  *
  * @augments ReferenceNode
  */
 class UserDataNode extends ReferenceNode {
+  // 返回节点类型标识符
+  static get type() {
+    return "UserDataNode";
+  }
 
-	static get type() {
+  /**
+   * 构造一个新的用户数据节点
+   *
+   * @param {string} property - 节点应引用的属性名称
+   * @param {string} inputType - 引用的节点数据类型
+   * @param {?Object} [userData=null] - 对 `userData` 对象的引用。如果未提供，将评估使用节点材质的3D对象的 `userData` 属性
+   */
+  constructor(property, inputType, userData = null) {
+    // 调用父类构造函数
+    super(property, inputType, userData);
 
-		return 'UserDataNode';
+    /**
+     * 对 `userData` 对象的引用。如果未提供，将评估使用节点材质的3D对象的 `userData` 属性
+     *
+     * @type {?Object}
+     * @default null
+     */
+    this.userData = userData;
+  }
 
-	}
+  /**
+   * 重写以确保 {@link ReferenceNode#reference} 指向正确的 `userData` 字段
+   *
+   * @param {(NodeFrame|NodeBuilder)} state - 要评估的当前状态
+   * @return {Object} 对 `userData` 字段的引用
+   */
+  updateReference(state) {
+    // 如果设置了userData则使用设置的，否则使用状态对象的userData
+    this.reference = this.userData !== null ? this.userData : state.object.userData;
 
-	/**
-	 * Constructs a new user data node.
-	 *
-	 * @param {string} property - The property name that should be referenced by the node.
-	 * @param {string} inputType - The node data type of the reference.
-	 * @param {?Object} [userData=null] - A reference to the `userData` object. If not provided, the `userData` property of the 3D object that uses the node material is evaluated.
-	 */
-	constructor( property, inputType, userData = null ) {
-
-		super( property, inputType, userData );
-
-		/**
-		 * A reference to the `userData` object. If not provided, the `userData`
-		 * property of the 3D object that uses the node material is evaluated.
-		 *
-		 * @type {?Object}
-		 * @default null
-		 */
-		this.userData = userData;
-
-	}
-
-	/**
-	 * Overwritten to make sure {@link ReferenceNode#reference} points to the correct
-	 * `userData` field.
-	 *
-	 * @param {(NodeFrame|NodeBuilder)} state - The current state to evaluate.
-	 * @return {Object} A reference to the `userData` field.
-	 */
-	updateReference( state ) {
-
-		this.reference = this.userData !== null ? this.userData : state.object.userData;
-
-		return this.reference;
-
-	}
-
+    return this.reference;
+  }
 }
 
+// 导出UserDataNode类作为默认导出
 export default UserDataNode;
 
 /**
- * TSL function for creating a user data node.
+ * TSL函数 - 用于创建用户数据节点
  *
  * @tsl
  * @function
- * @param {string} name - The property name that should be referenced by the node.
- * @param {string} inputType - The node data type of the reference.
- * @param {?Object} userData - A reference to the `userData` object. If not provided, the `userData` property of the 3D object that uses the node material is evaluated.
+ * @param {string} name - 节点应引用的属性名称
+ * @param {string} inputType - 引用的节点数据类型
+ * @param {?Object} userData - 对 `userData` 对象的引用。如果未提供，将评估使用节点材质的3D对象的 `userData` 属性
  * @returns {UserDataNode}
  */
-export const userData = ( name, inputType, userData ) => nodeObject( new UserDataNode( name, inputType, userData ) );
+export const userData = (name, inputType, userData) => nodeObject(new UserDataNode(name, inputType, userData));
