@@ -1,103 +1,103 @@
-import Node from './Node.js';
-import { nodeProxy } from '../tsl/TSLBase.js';
+import Node from "./Node.js"; // 导入Node基类
+import { nodeProxy } from "../tsl/TSLBase.js"; // 导入nodeProxy函数
 
 /**
- * This node can be used to define multiple outputs in a shader programs.
+ * 此节点可用于在着色器程序中定义多个输出。
  *
  * @augments Node
  */
 class OutputStructNode extends Node {
+  // 定义OutputStructNode类，继承自Node
 
-	static get type() {
+  static get type() {
+    // 静态getter方法，返回节点类型
 
-		return 'OutputStructNode';
+    return "OutputStructNode"; // 返回节点类型字符串
+  }
 
-	}
+  /**
+   * 构造一个新的输出结构节点。构造函数可以接受任意数量的
+   * 代表成员的节点。
+   *
+   * @param {...Node} members - 节点的参数列表。
+   */
+  constructor(...members) {
+    // 构造函数，接受可变数量的成员节点
 
-	/**
-	 * Constructs a new output struct node. The constructor can be invoked with an
-	 * arbitrary number of nodes representing the members.
-	 *
-	 * @param {...Node} members - A parameter list of nodes.
-	 */
-	constructor( ...members ) {
+    super(); // 调用父类构造函数
 
-		super();
+    /**
+     * 定义输出的节点数组。
+     *
+     * @type {Array<Node>}
+     */
+    this.members = members; // 存储成员节点数组
 
-		/**
-		 * An array of nodes which defines the output.
-		 *
-		 * @type {Array<Node>}
-		 */
-		this.members = members;
+    /**
+     * 此标志可用于类型测试。
+     *
+     * @type {boolean}
+     * @readonly
+     * @default true
+     */
+    this.isOutputStructNode = true; // 标识这是一个输出结构节点对象
+  }
 
-		/**
-		 * This flag can be used for type testing.
-		 *
-		 * @type {boolean}
-		 * @readonly
-		 * @default true
-		 */
-		this.isOutputStructNode = true;
+  getNodeType(builder) {
+    // 获取节点类型的方法
 
-	}
+    const properties = builder.getNodeProperties(this); // 获取节点属性
 
-	getNodeType( builder ) {
+    if (properties.membersLayout === undefined) {
+      // 如果成员布局未定义
 
-		const properties = builder.getNodeProperties( this );
+      const members = this.members; // 获取成员节点
+      const membersLayout = []; // 创建成员布局数组
 
-		if ( properties.membersLayout === undefined ) {
+      for (let i = 0; i < members.length; i++) {
+        // 遍历所有成员节点
 
-			const members = this.members;
-			const membersLayout = [];
+        const name = "m" + i; // 生成成员名称
+        const type = members[i].getNodeType(builder); // 获取成员节点类型
 
-			for ( let i = 0; i < members.length; i ++ ) {
+        membersLayout.push({ name, type, index: i }); // 添加成员布局信息
+      }
 
-				const name = 'm' + i;
-				const type = members[ i ].getNodeType( builder );
+      properties.membersLayout = membersLayout; // 设置成员布局
+      properties.structType = builder.getOutputStructTypeFromNode(this, properties.membersLayout); // 获取结构类型
+    }
 
-				membersLayout.push( { name, type, index: i } );
+    return properties.structType.name; // 返回结构类型名称
+  }
 
-			}
+  generate(builder) {
+    // 生成着色器代码的方法
 
-			properties.membersLayout = membersLayout;
-			properties.structType = builder.getOutputStructTypeFromNode( this, properties.membersLayout );
+    const propertyName = builder.getOutputStructName(); // 获取输出结构名称
+    const members = this.members; // 获取成员节点
 
-		}
+    const structPrefix = propertyName !== "" ? propertyName + "." : ""; // 构建结构前缀
 
-		return properties.structType.name;
+    for (let i = 0; i < members.length; i++) {
+      // 遍历所有成员节点
 
-	}
+      const snippet = members[i].build(builder); // 构建成员节点代码
 
-	generate( builder ) {
+      builder.addLineFlowCode(`${structPrefix}m${i} = ${snippet}`, this); // 添加赋值代码行
+    }
 
-		const propertyName = builder.getOutputStructName();
-		const members = this.members;
-
-		const structPrefix = propertyName !== '' ? propertyName + '.' : '';
-
-		for ( let i = 0; i < members.length; i ++ ) {
-
-			const snippet = members[ i ].build( builder );
-
-			builder.addLineFlowCode( `${ structPrefix }m${ i } = ${ snippet }`, this );
-
-		}
-
-		return propertyName;
-
-	}
-
+    return propertyName; // 返回属性名称
+  }
 }
 
-export default OutputStructNode;
+export default OutputStructNode; // 导出OutputStructNode类作为默认导出
 
 /**
- * TSL function for creating an output struct node.
+ * 用于创建输出结构节点的TSL函数。
  *
  * @tsl
  * @function
- * @param {...Node} members - A parameter list of nodes.
+ * @param {...Node} members - 节点的参数列表。
  * @returns {OutputStructNode}
  */
-export const outputStruct = /*@__PURE__*/ nodeProxy( OutputStructNode );
+export const outputStruct = /*@__PURE__*/ nodeProxy(OutputStructNode); // 导出outputStruct函数，用于创建输出结构节点

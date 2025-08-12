@@ -1,88 +1,88 @@
-import Node from './Node.js';
+import Node from "./Node.js"; // 导入Node基类
 
 /**
- * This module uses cache management to create temporary variables
- * if the node is used more than once to prevent duplicate calculations.
+ * 此模块使用缓存管理来创建临时变量，
+ * 如果节点被多次使用，以防止重复计算。
  *
- * The class acts as a base class for many other nodes types.
+ * 该类作为许多其他节点类型的基类。
  *
  * @augments Node
  */
 class TempNode extends Node {
+  // 定义TempNode类，继承自Node
 
-	static get type() {
+  static get type() {
+    // 静态getter方法，返回节点类型
 
-		return 'TempNode';
+    return "TempNode"; // 返回节点类型字符串
+  }
 
-	}
+  /**
+   * 构造一个临时节点。
+   *
+   * @param {?string} nodeType - 节点类型。
+   */
+  constructor(nodeType = null) {
+    // 构造函数，接受可选的节点类型参数
 
-	/**
-	 * Constructs a temp node.
-	 *
-	 * @param {?string} nodeType - The node type.
-	 */
-	constructor( nodeType = null ) {
+    super(nodeType); // 调用父类构造函数
 
-		super( nodeType );
+    /**
+     * 此标志可用于类型测试。
+     *
+     * @type {boolean}
+     * @readonly
+     * @default true
+     */
+    this.isTempNode = true; // 标识这是一个临时节点对象
+  }
 
-		/**
-		 * This flag can be used for type testing.
-		 *
-		 * @type {boolean}
-		 * @readonly
-		 * @default true
-		 */
-		this.isTempNode = true;
+  /**
+   * 检查此节点是否在其他节点的上下文中被多次使用。
+   *
+   * @param {NodeBuilder} builder - 节点构建器。
+   * @return {boolean} 指示是否有多个对其他节点的依赖关系的标志。
+   */
+  hasDependencies(builder) {
+    // 检查是否有依赖关系的方法
 
-	}
+    return builder.getDataFromNode(this).usageCount > 1; // 返回使用次数是否大于1
+  }
 
-	/**
-	 * Whether this node is used more than once in context of other nodes.
-	 *
-	 * @param {NodeBuilder} builder - The node builder.
-	 * @return {boolean} A flag that indicates if there is more than one dependency to other nodes.
-	 */
-	hasDependencies( builder ) {
+  build(builder, output) {
+    // 构建方法，用于生成着色器代码
 
-		return builder.getDataFromNode( this ).usageCount > 1;
+    const buildStage = builder.getBuildStage(); // 获取构建阶段
 
-	}
+    if (buildStage === "generate") {
+      // 如果是生成阶段
 
-	build( builder, output ) {
+      const type = builder.getVectorType(this.getNodeType(builder, output)); // 获取向量类型
+      const nodeData = builder.getDataFromNode(this); // 获取节点数据
 
-		const buildStage = builder.getBuildStage();
+      if (nodeData.propertyName !== undefined) {
+        // 如果属性名已定义
 
-		if ( buildStage === 'generate' ) {
+        return builder.format(nodeData.propertyName, type, output); // 格式化并返回属性名
+      } else if (type !== "void" && output !== "void" && this.hasDependencies(builder)) {
+        // 如果类型不为void且有依赖关系
 
-			const type = builder.getVectorType( this.getNodeType( builder, output ) );
-			const nodeData = builder.getDataFromNode( this );
+        const snippet = super.build(builder, type); // 调用父类构建方法获取代码片段
 
-			if ( nodeData.propertyName !== undefined ) {
+        const nodeVar = builder.getVarFromNode(this, null, type); // 获取节点变量
+        const propertyName = builder.getPropertyName(nodeVar); // 获取属性名
 
-				return builder.format( nodeData.propertyName, type, output );
+        builder.addLineFlowCode(`${propertyName} = ${snippet}`, this); // 添加赋值代码行
 
-			} else if ( type !== 'void' && output !== 'void' && this.hasDependencies( builder ) ) {
+        nodeData.snippet = snippet; // 存储代码片段
+        nodeData.propertyName = propertyName; // 存储属性名
 
-				const snippet = super.build( builder, type );
+        return builder.format(nodeData.propertyName, type, output); // 格式化并返回属性名
+      }
+    }
 
-				const nodeVar = builder.getVarFromNode( this, null, type );
-				const propertyName = builder.getPropertyName( nodeVar );
-
-				builder.addLineFlowCode( `${ propertyName } = ${ snippet }`, this );
-
-				nodeData.snippet = snippet;
-				nodeData.propertyName = propertyName;
-
-				return builder.format( nodeData.propertyName, type, output );
-
-			}
-
-		}
-
-		return super.build( builder, output );
-
-	}
-
+    return super.build(builder, output); // 调用父类构建方法
+  }
 }
 
-export default TempNode;
+export default TempNode; // 导出TempNode类作为默认导出

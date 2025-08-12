@@ -1,81 +1,81 @@
-import Node from '../core/Node.js';
-import { NodeUpdateType } from '../core/constants.js';
-import { property } from '../tsl/TSLBase.js';
-import { positionWorld } from '../accessors/Position.js';
+// 导入核心节点基类
+import Node from "../core/Node.js";
+// 导入节点更新类型常量
+import { NodeUpdateType } from "../core/constants.js";
+// 导入TSL属性函数
+import { property } from "../tsl/TSLBase.js";
+// 导入世界坐标位置访问器
+import { positionWorld } from "../accessors/Position.js";
 
 /**
- * Base class for all shadow nodes.
+ * 所有阴影节点的基类。
  *
- * Shadow nodes encapsulate shadow related logic and are always coupled to lighting nodes.
- * Lighting nodes might share the same shadow node type or use specific ones depending on
- * their requirements.
+ * 阴影节点封装了与阴影相关的逻辑，并且总是与光照节点耦合。
+ * 光照节点可能共享相同的阴影节点类型，或者根据其需求使用特定的阴影节点。
  *
  * @augments Node
  */
 class ShadowBaseNode extends Node {
+  // 返回节点类型标识符
+  static get type() {
+    return "ShadowBaseNode";
+  }
 
-	static get type() {
+  /**
+   * 构造一个新的阴影基础节点。
+   *
+   * @param {Object} light - 投射阴影的光源对象
+   */
+  constructor(light) {
+    // 调用父类构造函数
+    super();
 
-		return 'ShadowBaseNode';
+    /**
+     * 投射阴影的光源对象。
+     *
+     * @type {Object}
+     */
+    this.light = light;
 
-	}
+    /**
+     * 重写默认值，因为阴影默认在每次渲染时更新。
+     *
+     * @type {string}
+     * @default 'render'
+     */
+    this.updateBeforeType = NodeUpdateType.RENDER;
 
-	/**
-	 * Constructs a new shadow base node.
-	 *
-	 * @param {Light} light - The shadow casting light.
-	 */
-	constructor( light ) {
+    /**
+     * 此标志可用于类型测试。
+     *
+     * @type {boolean}
+     * @readonly
+     * @default true
+     */
+    this.isShadowBaseNode = true;
+  }
 
-		super();
+  /**
+   * 设置阴影位置节点，默认为预定义的TSL节点对象 `shadowPositionWorld`。
+   *
+   * @param {NodeBuilder} object - 必须至少包含材质引用的配置对象
+   */
+  setupShadowPosition({ context, material }) {
+    // 在 Fn() 内部使用 assign
 
-		/**
-		 * The shadow casting light.
-		 *
-		 * @type {Light}
-		 */
-		this.light = light;
-
-		/**
-		 * Overwritten since shadows are updated by default per render.
-		 *
-		 * @type {string}
-		 * @default 'render'
-		 */
-		this.updateBeforeType = NodeUpdateType.RENDER;
-
-		/**
-		 * This flag can be used for type testing.
-		 *
-		 * @type {boolean}
-		 * @readonly
-		 * @default true
-		 */
-		this.isShadowBaseNode = true;
-
-	}
-
-	/**
-	 * Setups the shadow position node which is by default the predefined TSL node object `shadowPositionWorld`.
-	 *
-	 * @param {NodeBuilder} object - A configuration object that must at least hold a material reference.
-	 */
-	setupShadowPosition( { context, material } ) {
-
-		// Use assign inside an Fn()
-
-		shadowPositionWorld.assign( material.receivedShadowPositionNode || context.shadowPositionWorld || positionWorld );
-
-	}
-
+    // 分配阴影位置世界坐标，优先使用材质的接收阴影位置节点，
+    // 其次使用上下文的阴影位置世界坐标，最后使用默认的世界位置
+    shadowPositionWorld.assign(material.receivedShadowPositionNode || context.shadowPositionWorld || positionWorld);
+  }
 }
 
 /**
- * TSL object that represents the vertex position in world space during the shadow pass.
+ * TSL对象，表示阴影通道期间顶点在世界空间中的位置。
  *
  * @tsl
  * @type {Node<vec3>}
  */
-export const shadowPositionWorld = /*@__PURE__*/ property( 'vec3', 'shadowPositionWorld' );
+export const shadowPositionWorld = /*@__PURE__*/ property("vec3", "shadowPositionWorld");
 
+// 导出阴影基础节点类作为默认导出
 export default ShadowBaseNode;

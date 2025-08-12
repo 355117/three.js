@@ -1,150 +1,155 @@
-import OutputStructNode from './OutputStructNode.js';
-import { nodeProxy, vec4 } from '../tsl/TSLBase.js';
+// 导入输出结构节点基类
+import OutputStructNode from "./OutputStructNode.js";
+// 导入TSL基础功能：节点代理和四维向量
+import { nodeProxy, vec4 } from "../tsl/TSLBase.js";
 
 /**
- * Returns the MRT texture index for the given name.
+ * 获取指定名称的MRT纹理索引
  *
- * @param {Array<Texture>} textures - The textures of a MRT-configured render target.
- * @param {string} name - The name of the MRT texture which index is requested.
- * @return {number} The texture index.
+ * @param {Array<Texture>} textures - MRT配置渲染目标的纹理数组
+ * @param {string} name - 请求索引的MRT纹理名称
+ * @return {number} 纹理索引，如果未找到则返回-1
  */
-export function getTextureIndex( textures, name ) {
+export function getTextureIndex(textures, name) {
+  // 遍历纹理数组查找匹配的名称
+  for (let i = 0; i < textures.length; i++) {
+    // 如果找到匹配的纹理名称
+    if (textures[i].name === name) {
+      // 返回对应的索引
+      return i;
+    }
+  }
 
-	for ( let i = 0; i < textures.length; i ++ ) {
-
-		if ( textures[ i ].name === name ) {
-
-			return i;
-
-		}
-
-	}
-
-	return - 1;
-
+  // 未找到匹配的纹理，返回-1
+  return -1;
 }
 
 /**
- * This node can be used setup a MRT context for rendering. A typical MRT setup for
- * post-processing is shown below:
+ * MRT节点类 - 用于设置渲染的MRT（多渲染目标）上下文
+ * 典型的后处理MRT设置如下所示：
  * ```js
  * const mrtNode = mrt( {
  *   output: output,
  *   normal: normalView
- * } ) );
+ * } );
  * ```
- * The MRT output is defined as a dictionary.
+ * MRT输出定义为字典形式
  *
  * @augments OutputStructNode
  */
 class MRTNode extends OutputStructNode {
+  // 静态方法：返回节点类型标识符
+  static get type() {
+    return "MRTNode"; // 返回节点类型名称
+  }
 
-	static get type() {
+  /**
+   * 构造一个新的MRT节点
+   *
+   * @param {Object<string, Node>} outputNodes - MRT输出节点字典
+   */
+  constructor(outputNodes) {
+    // 调用父类构造函数
+    super();
 
-		return 'MRTNode';
+    /**
+     * 表示MRT输出的字典对象
+     * 键是输出的名称，值是产生输出结果的节点
+     *
+     * @type {Object<string, Node>}
+     */
+    this.outputNodes = outputNodes;
 
-	}
+    /**
+     * 类型测试标志 - 用于识别此节点为MRT节点
+     *
+     * @type {boolean}
+     * @readonly
+     * @default true
+     */
+    this.isMRTNode = true;
+  }
 
-	/**
-	 * Constructs a new output struct node.
-	 *
-	 * @param {Object<string, Node>} outputNodes - The MRT outputs.
-	 */
-	constructor( outputNodes ) {
+  /**
+   * 检查MRT节点是否具有指定名称的输出
+   *
+   * @param {string} name - 输出的名称
+   * @return {boolean} 如果MRT节点具有指定名称的输出则返回true，否则返回false
+   */
+  has(name) {
+    // 检查输出节点字典中是否存在指定名称的输出
+    return this.outputNodes[name] !== undefined;
+  }
 
-		super();
+  /**
+   * 获取指定名称的输出节点
+   *
+   * @param {string} name - 输出的名称
+   * @return {Node} 对应的输出节点
+   */
+  get(name) {
+    // 从输出节点字典中返回指定名称的节点
+    return this.outputNodes[name];
+  }
 
-		/**
-		 * A dictionary representing the MRT outputs. The key
-		 * is the name of the output, the value the node which produces
-		 * the output result.
-		 *
-		 * @type {Object<string, Node>}
-		 */
-		this.outputNodes = outputNodes;
+  /**
+   * 合并指定MRT节点的输出与当前节点的输出
+   *
+   * @param {MRTNode} mrtNode - 要合并的MRT节点
+   * @return {MRTNode} 包含合并输出的新MRT节点
+   */
+  merge(mrtNode) {
+    // 使用展开运算符合并两个输出节点字典
+    const outputs = { ...this.outputNodes, ...mrtNode.outputNodes };
 
-		/**
-		 * This flag can be used for type testing.
-		 *
-		 * @type {boolean}
-		 * @readonly
-		 * @default true
-		 */
-		this.isMRTNode = true;
+    // 创建并返回新的MRT节点
+    return mrt(outputs);
+  }
 
-	}
+  /**
+   * 设置MRT节点 - 配置多渲染目标的输出结构
+   *
+   * @param {NodeBuilder} builder - 节点构建器
+   * @return {any} 父类setup方法的返回值
+   */
+  setup(builder) {
+    // 获取输出节点字典
+    const outputNodes = this.outputNodes;
+    // 获取渲染器的渲染目标
+    const mrt = builder.renderer.getRenderTarget();
 
-	/**
-	 * Returns `true` if the MRT node has an output with the given name.
-	 *
-	 * @param {string} name - The name of the output.
-	 * @return {NodeBuilder} Whether the MRT node has an output for the given name or not.
-	 */
-	has( name ) {
+    // 初始化成员数组
+    const members = [];
 
-		return this.outputNodes[ name ] !== undefined;
+    // 获取渲染目标的纹理数组
+    const textures = mrt.textures;
 
-	}
+    // 遍历所有输出节点
+    for (const name in outputNodes) {
+      // 获取当前输出名称对应的纹理索引
+      const index = getTextureIndex(textures, name);
 
-	/**
-	 * Returns the output node for the given name.
-	 *
-	 * @param {string} name - The name of the output.
-	 * @return {Node} The output node.
-	 */
-	get( name ) {
+      // 将输出节点转换为vec4并存储到对应索引位置
+      members[index] = vec4(outputNodes[name]);
+    }
 
-		return this.outputNodes[ name ];
+    // 设置成员数组
+    this.members = members;
 
-	}
-
-	/**
-	 * Merges the outputs of the given MRT node with the outputs of this node.
-	 *
-	 * @param {MRTNode} mrtNode - The MRT to merge.
-	 * @return {MRTNode} A new MRT node with merged outputs..
-	 */
-	merge( mrtNode ) {
-
-		const outputs = { ...this.outputNodes, ...mrtNode.outputNodes };
-
-		return mrt( outputs );
-
-	}
-
-	setup( builder ) {
-
-		const outputNodes = this.outputNodes;
-		const mrt = builder.renderer.getRenderTarget();
-
-		const members = [];
-
-		const textures = mrt.textures;
-
-		for ( const name in outputNodes ) {
-
-			const index = getTextureIndex( textures, name );
-
-			members[ index ] = vec4( outputNodes[ name ] );
-
-		}
-
-		this.members = members;
-
-		return super.setup( builder );
-
-	}
-
+    // 调用父类的setup方法
+    return super.setup(builder);
+  }
 }
 
+// 导出MRT节点类作为默认导出
 export default MRTNode;
 
 /**
- * TSL function for creating a MRT node.
+ * TSL函数：创建MRT节点
  *
  * @tsl
  * @function
- * @param {Object<string, Node>} outputNodes - The MRT outputs.
- * @returns {MRTNode}
+ * @param {Object<string, Node>} outputNodes - MRT输出节点字典
+ * @returns {MRTNode} MRT节点实例
  */
-export const mrt = /*@__PURE__*/ nodeProxy( MRTNode );
+export const mrt = /*@__PURE__*/ nodeProxy(MRTNode);

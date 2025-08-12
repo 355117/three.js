@@ -1,14 +1,14 @@
-import TempNode from '../core/TempNode.js';
+import TempNode from "../core/TempNode.js"; // 导入TempNode基类
 
-import { normalView, transformNormalToView } from '../accessors/Normal.js';
-import { TBNViewMatrix } from '../accessors/AccessorsUtils.js';
-import { nodeProxy, vec3 } from '../tsl/TSLBase.js';
+import { normalView, transformNormalToView } from "../accessors/Normal.js"; // 导入法线相关访问器
+import { TBNViewMatrix } from "../accessors/AccessorsUtils.js"; // 导入TBN视图矩阵
+import { nodeProxy, vec3 } from "../tsl/TSLBase.js"; // 导入TSL核心函数
 
-import { TangentSpaceNormalMap, ObjectSpaceNormalMap } from '../../constants.js';
-import { directionToFaceDirection } from './FrontFacingNode.js';
+import { TangentSpaceNormalMap, ObjectSpaceNormalMap } from "../../constants.js"; // 导入法线贴图类型常量
+import { directionToFaceDirection } from "./FrontFacingNode.js"; // 导入方向到面方向的转换函数
 
 /**
- * This class can be used for applying normals maps to materials.
+ * 此类可用于将法线贴图应用于材质。
  *
  * ```js
  * material.normalNode = normalMap( texture( normalTex ) );
@@ -17,101 +17,101 @@ import { directionToFaceDirection } from './FrontFacingNode.js';
  * @augments TempNode
  */
 class NormalMapNode extends TempNode {
+  // 定义NormalMapNode类，继承自TempNode
 
-	static get type() {
+  static get type() {
+    // 静态getter方法，返回节点类型
 
-		return 'NormalMapNode';
+    return "NormalMapNode"; // 返回节点类型字符串
+  }
 
-	}
+  /**
+   * 构造一个新的法线贴图节点。
+   *
+   * @param {Node<vec3>} node - 表示法线贴图数据。
+   * @param {?Node<vec2>} [scaleNode=null] - 控制效果的强度。
+   */
+  constructor(node, scaleNode = null) {
+    // 构造函数，接受节点和可选的缩放节点
 
-	/**
-	 * Constructs a new normal map node.
-	 *
-	 * @param {Node<vec3>} node - Represents the normal map data.
-	 * @param {?Node<vec2>} [scaleNode=null] - Controls the intensity of the effect.
-	 */
-	constructor( node, scaleNode = null ) {
+    super("vec3"); // 调用父类构造函数，类型为vec3
 
-		super( 'vec3' );
+    /**
+     * 表示法线贴图数据。
+     *
+     * @type {Node<vec3>}
+     */
+    this.node = node; // 存储法线贴图节点
 
-		/**
-		 * Represents the normal map data.
-		 *
-		 * @type {Node<vec3>}
-		 */
-		this.node = node;
+    /**
+     * 控制效果的强度。
+     *
+     * @type {?Node<vec2>}
+     * @default null
+     */
+    this.scaleNode = scaleNode; // 存储缩放节点
 
-		/**
-		 * Controls the intensity of the effect.
-		 *
-		 * @type {?Node<vec2>}
-		 * @default null
-		 */
-		this.scaleNode = scaleNode;
+    /**
+     * 法线贴图类型。
+     *
+     * @type {(TangentSpaceNormalMap|ObjectSpaceNormalMap)}
+     * @default TangentSpaceNormalMap
+     */
+    this.normalMapType = TangentSpaceNormalMap; // 设置默认法线贴图类型为切线空间
+  }
 
-		/**
-		 * The normal map type.
-		 *
-		 * @type {(TangentSpaceNormalMap|ObjectSpaceNormalMap)}
-		 * @default TangentSpaceNormalMap
-		 */
-		this.normalMapType = TangentSpaceNormalMap;
+  setup({ material }) {
+    // 设置方法，接受材质参数
 
-	}
+    const { normalMapType, scaleNode } = this; // 解构获取法线贴图类型和缩放节点
 
-	setup( { material } ) {
+    let normalMap = this.node.mul(2.0).sub(1.0); // 将法线贴图从[0,1]范围转换为[-1,1]范围
 
-		const { normalMapType, scaleNode } = this;
+    if (scaleNode !== null) {
+      // 如果有缩放节点
 
-		let normalMap = this.node.mul( 2.0 ).sub( 1.0 );
+      let scale = scaleNode; // 获取缩放值
 
-		if ( scaleNode !== null ) {
+      if (material.flatShading === true) {
+        // 如果材质使用平面着色
 
-			let scale = scaleNode;
+        scale = directionToFaceDirection(scale); // 根据面方向调整缩放
+      }
 
-			if ( material.flatShading === true ) {
+      normalMap = vec3(normalMap.xy.mul(scale), normalMap.z); // 应用缩放到法线贴图的xy分量
+    }
 
-				scale = directionToFaceDirection( scale );
+    let output = null; // 初始化输出
 
-			}
+    if (normalMapType === ObjectSpaceNormalMap) {
+      // 如果是对象空间法线贴图
 
-			normalMap = vec3( normalMap.xy.mul( scale ), normalMap.z );
+      output = transformNormalToView(normalMap); // 将对象空间法线转换为视图空间
+    } else if (normalMapType === TangentSpaceNormalMap) {
+      // 如果是切线空间法线贴图
 
-		}
+      output = TBNViewMatrix.mul(normalMap).normalize(); // 使用TBN矩阵转换切线空间法线并归一化
+    } else {
+      // 如果是不支持的法线贴图类型
 
-		let output = null;
+      console.error(`THREE.NodeMaterial: Unsupported normal map type: ${normalMapType}`); // 输出错误信息
 
-		if ( normalMapType === ObjectSpaceNormalMap ) {
+      output = normalView; // 回退到默认法线视图
+    }
 
-			output = transformNormalToView( normalMap );
-
-		} else if ( normalMapType === TangentSpaceNormalMap ) {
-
-			output = TBNViewMatrix.mul( normalMap ).normalize();
-
-		} else {
-
-			console.error( `THREE.NodeMaterial: Unsupported normal map type: ${ normalMapType }` );
-
-			output = normalView; // Fallback to default normal view
-
-		}
-
-		return output;
-
-	}
-
+    return output; // 返回处理后的法线
+  }
 }
 
-export default NormalMapNode;
+export default NormalMapNode; // 导出NormalMapNode类作为默认导出
 
 /**
- * TSL function for creating a normal map node.
+ * 用于创建法线贴图节点的TSL函数。
  *
  * @tsl
  * @function
- * @param {Node<vec3>} node - Represents the normal map data.
- * @param {?Node<vec2>} [scaleNode=null] - Controls the intensity of the effect.
+ * @param {Node<vec3>} node - 表示法线贴图数据。
+ * @param {?Node<vec2>} [scaleNode=null] - 控制效果的强度。
  * @returns {NormalMapNode}
  */
-export const normalMap = /*@__PURE__*/ nodeProxy( NormalMapNode ).setParameterLength( 1, 2 );
+export const normalMap = /*@__PURE__*/ nodeProxy(NormalMapNode).setParameterLength(1, 2); // 导出normalMap函数，用于创建法线贴图节点

@@ -1,175 +1,178 @@
-import { Fn, If, mat3, vec2, vec3 } from '../../tsl/TSLBase.js';
-import { max } from '../../math/MathNode.js';
+// 从TSL基础模块导入函数构造器、条件语句、矩阵和向量
+import { Fn, If, mat3, vec2, vec3 } from "../../tsl/TSLBase.js";
+// 从数学节点导入最大值函数
+import { max } from "../../math/MathNode.js";
 
-// Rect Area Light
+/**
+ * 线性变换余弦(LTC)面光源着色
+ *
+ * 这个模块实现了基于线性变换余弦的实时多边形光源着色算法。
+ * LTC是一种高效的面光源着色技术，特别适用于矩形区域光源。
+ *
+ * 基于论文："Real-Time Polygonal-Light Shading with Linearly Transformed Cosines"
+ * 作者：Eric Heitz, Jonathan Dupuy, Stephen Hill and David Neubelt
+ * 代码参考：https://github.com/selfshadow/ltc_code/
+ */
 
-// Real-Time Polygonal-Light Shading with Linearly Transformed Cosines
-// by Eric Heitz, Jonathan Dupuy, Stephen Hill and David Neubelt
-// code: https://github.com/selfshadow/ltc_code/
+// 矩形区域光源
 
-const LTC_Uv = /*@__PURE__*/ Fn( ( { N, V, roughness } ) => {
+// 使用线性变换余弦的实时多边形光源着色
+// 作者：Eric Heitz, Jonathan Dupuy, Stephen Hill and David Neubelt
+// 代码：https://github.com/selfshadow/ltc_code/
 
-	const LUT_SIZE = 64.0;
-	const LUT_SCALE = ( LUT_SIZE - 1.0 ) / LUT_SIZE;
-	const LUT_BIAS = 0.5 / LUT_SIZE;
+/**
+ * LTC UV坐标计算函数
+ *
+ * 计算用于查找LTC查找表的UV坐标。
+ * LUT使用sqrt(GGX alpha)和sqrt(1 - cos(theta))作为参数。
+ */
+const LTC_Uv = /*@__PURE__*/ Fn(({ N, V, roughness }) => {
+  const LUT_SIZE = 64.0; // 查找表大小
+  const LUT_SCALE = (LUT_SIZE - 1.0) / LUT_SIZE; // 缩放因子
+  const LUT_BIAS = 0.5 / LUT_SIZE; // 偏移量
 
-	const dotNV = N.dot( V ).saturate();
+  const dotNV = N.dot(V).saturate(); // 法线与视图方向的点积
 
-	// texture parameterized by sqrt( GGX alpha ) and sqrt( 1 - cos( theta ) )
-	const uv = vec2( roughness, dotNV.oneMinus().sqrt() );
+  // 纹理参数化：sqrt(GGX alpha)和sqrt(1 - cos(theta))
+  const uv = vec2(roughness, dotNV.oneMinus().sqrt());
 
-	uv.assign( uv.mul( LUT_SCALE ).add( LUT_BIAS ) );
+  uv.assign(uv.mul(LUT_SCALE).add(LUT_BIAS)); // 应用缩放和偏移
 
-	return uv;
+  return uv; // 返回UV坐标
+}).setLayout({
+  name: "LTC_Uv",
+  type: "vec2",
+  inputs: [
+    { name: "N", type: "vec3" },
+    { name: "V", type: "vec3" },
+    { name: "roughness", type: "float" },
+  ],
+});
 
-} ).setLayout( {
-	name: 'LTC_Uv',
-	type: 'vec2',
-	inputs: [
-		{ name: 'N', type: 'vec3' },
-		{ name: 'V', type: 'vec3' },
-		{ name: 'roughness', type: 'float' }
-	]
-} );
+const LTC_ClippedSphereFormFactor = /*@__PURE__*/ Fn(({ f }) => {
+  // Real-Time Area Lighting: a Journey from Research to Production (p.102)
+  // An approximation of the form factor of a horizon-clipped rectangle.
 
-const LTC_ClippedSphereFormFactor = /*@__PURE__*/ Fn( ( { f } ) => {
+  const l = f.length();
 
-	// Real-Time Area Lighting: a Journey from Research to Production (p.102)
-	// An approximation of the form factor of a horizon-clipped rectangle.
+  return max(l.mul(l).add(f.z).div(l.add(1.0)), 0);
+}).setLayout({
+  name: "LTC_ClippedSphereFormFactor",
+  type: "float",
+  inputs: [{ name: "f", type: "vec3" }],
+});
 
-	const l = f.length();
+const LTC_EdgeVectorFormFactor = /*@__PURE__*/ Fn(({ v1, v2 }) => {
+  const x = v1.dot(v2);
+  const y = x.abs().toVar();
 
-	return max( l.mul( l ).add( f.z ).div( l.add( 1.0 ) ), 0 );
+  // rational polynomial approximation to theta / sin( theta ) / 2PI
+  const a = y.mul(0.0145206).add(0.4965155).mul(y).add(0.8543985).toVar();
+  const b = y.add(4.1616724).mul(y).add(3.417594).toVar();
+  const v = a.div(b);
 
-} ).setLayout( {
-	name: 'LTC_ClippedSphereFormFactor',
-	type: 'float',
-	inputs: [
-		{ name: 'f', type: 'vec3' }
-	]
-} );
+  const theta_sintheta = x.greaterThan(0.0).select(v, max(x.mul(x).oneMinus(), 1e-7).inverseSqrt().mul(0.5).sub(v));
 
-const LTC_EdgeVectorFormFactor = /*@__PURE__*/ Fn( ( { v1, v2 } ) => {
+  return v1.cross(v2).mul(theta_sintheta);
+}).setLayout({
+  name: "LTC_EdgeVectorFormFactor",
+  type: "vec3",
+  inputs: [
+    { name: "v1", type: "vec3" },
+    { name: "v2", type: "vec3" },
+  ],
+});
 
-	const x = v1.dot( v2 );
-	const y = x.abs().toVar();
+const LTC_Evaluate = /*@__PURE__*/ Fn(({ N, V, P, mInv, p0, p1, p2, p3 }) => {
+  // bail if point is on back side of plane of light
+  // assumes ccw winding order of light vertices
+  const v1 = p1.sub(p0).toVar();
+  const v2 = p3.sub(p0).toVar();
 
-	// rational polynomial approximation to theta / sin( theta ) / 2PI
-	const a = y.mul( 0.0145206 ).add( 0.4965155 ).mul( y ).add( 0.8543985 ).toVar();
-	const b = y.add( 4.1616724 ).mul( y ).add( 3.4175940 ).toVar();
-	const v = a.div( b );
+  const lightNormal = v1.cross(v2);
+  const result = vec3().toVar();
 
-	const theta_sintheta = x.greaterThan( 0.0 ).select( v, max( x.mul( x ).oneMinus(), 1e-7 ).inverseSqrt().mul( 0.5 ).sub( v ) );
+  If(lightNormal.dot(P.sub(p0)).greaterThanEqual(0.0), () => {
+    // construct orthonormal basis around N
+    const T1 = V.sub(N.mul(V.dot(N))).normalize();
+    const T2 = N.cross(T1).negate(); // negated from paper; possibly due to a different handedness of world coordinate system
 
-	return v1.cross( v2 ).mul( theta_sintheta );
+    // compute transform
+    const mat = mInv.mul(mat3(T1, T2, N).transpose()).toVar();
 
-} ).setLayout( {
-	name: 'LTC_EdgeVectorFormFactor',
-	type: 'vec3',
-	inputs: [
-		{ name: 'v1', type: 'vec3' },
-		{ name: 'v2', type: 'vec3' }
-	]
-} );
+    // transform rect
+    // & project rect onto sphere
+    const coords0 = mat.mul(p0.sub(P)).normalize().toVar();
+    const coords1 = mat.mul(p1.sub(P)).normalize().toVar();
+    const coords2 = mat.mul(p2.sub(P)).normalize().toVar();
+    const coords3 = mat.mul(p3.sub(P)).normalize().toVar();
 
-const LTC_Evaluate = /*@__PURE__*/ Fn( ( { N, V, P, mInv, p0, p1, p2, p3 } ) => {
+    // calculate vector form factor
+    const vectorFormFactor = vec3(0).toVar();
+    vectorFormFactor.addAssign(LTC_EdgeVectorFormFactor({ v1: coords0, v2: coords1 }));
+    vectorFormFactor.addAssign(LTC_EdgeVectorFormFactor({ v1: coords1, v2: coords2 }));
+    vectorFormFactor.addAssign(LTC_EdgeVectorFormFactor({ v1: coords2, v2: coords3 }));
+    vectorFormFactor.addAssign(LTC_EdgeVectorFormFactor({ v1: coords3, v2: coords0 }));
 
-	// bail if point is on back side of plane of light
-	// assumes ccw winding order of light vertices
-	const v1 = p1.sub( p0 ).toVar();
-	const v2 = p3.sub( p0 ).toVar();
+    // adjust for horizon clipping
+    result.assign(vec3(LTC_ClippedSphereFormFactor({ f: vectorFormFactor })));
+  });
 
-	const lightNormal = v1.cross( v2 );
-	const result = vec3().toVar();
+  return result;
+}).setLayout({
+  name: "LTC_Evaluate",
+  type: "vec3",
+  inputs: [
+    { name: "N", type: "vec3" },
+    { name: "V", type: "vec3" },
+    { name: "P", type: "vec3" },
+    { name: "mInv", type: "mat3" },
+    { name: "p0", type: "vec3" },
+    { name: "p1", type: "vec3" },
+    { name: "p2", type: "vec3" },
+    { name: "p3", type: "vec3" },
+  ],
+});
 
-	If( lightNormal.dot( P.sub( p0 ) ).greaterThanEqual( 0.0 ), () => {
+const LTC_Evaluate_Volume = /*@__PURE__*/ Fn(({ P, p0, p1, p2, p3 }) => {
+  // bail if point is on back side of plane of light
+  // assumes ccw winding order of light vertices
+  const v1 = p1.sub(p0).toVar();
+  const v2 = p3.sub(p0).toVar();
 
-		// construct orthonormal basis around N
-		const T1 = V.sub( N.mul( V.dot( N ) ) ).normalize();
-		const T2 = N.cross( T1 ).negate(); // negated from paper; possibly due to a different handedness of world coordinate system
+  const lightNormal = v1.cross(v2);
+  const result = vec3().toVar();
 
-		// compute transform
-		const mat = mInv.mul( mat3( T1, T2, N ).transpose() ).toVar();
+  If(lightNormal.dot(P.sub(p0)).greaterThanEqual(0.0), () => {
+    // transform rect
+    // & project rect onto sphere
+    const coords0 = p0.sub(P).normalize().toVar();
+    const coords1 = p1.sub(P).normalize().toVar();
+    const coords2 = p2.sub(P).normalize().toVar();
+    const coords3 = p3.sub(P).normalize().toVar();
 
-		// transform rect
-		// & project rect onto sphere
-		const coords0 = mat.mul( p0.sub( P ) ).normalize().toVar();
-		const coords1 = mat.mul( p1.sub( P ) ).normalize().toVar();
-		const coords2 = mat.mul( p2.sub( P ) ).normalize().toVar();
-		const coords3 = mat.mul( p3.sub( P ) ).normalize().toVar();
+    // calculate vector form factor
+    const vectorFormFactor = vec3(0).toVar();
+    vectorFormFactor.addAssign(LTC_EdgeVectorFormFactor({ v1: coords0, v2: coords1 }));
+    vectorFormFactor.addAssign(LTC_EdgeVectorFormFactor({ v1: coords1, v2: coords2 }));
+    vectorFormFactor.addAssign(LTC_EdgeVectorFormFactor({ v1: coords2, v2: coords3 }));
+    vectorFormFactor.addAssign(LTC_EdgeVectorFormFactor({ v1: coords3, v2: coords0 }));
 
-		// calculate vector form factor
-		const vectorFormFactor = vec3( 0 ).toVar();
-		vectorFormFactor.addAssign( LTC_EdgeVectorFormFactor( { v1: coords0, v2: coords1 } ) );
-		vectorFormFactor.addAssign( LTC_EdgeVectorFormFactor( { v1: coords1, v2: coords2 } ) );
-		vectorFormFactor.addAssign( LTC_EdgeVectorFormFactor( { v1: coords2, v2: coords3 } ) );
-		vectorFormFactor.addAssign( LTC_EdgeVectorFormFactor( { v1: coords3, v2: coords0 } ) );
+    // adjust for horizon clipping
+    result.assign(vec3(LTC_ClippedSphereFormFactor({ f: vectorFormFactor.abs() })));
+  });
 
-		// adjust for horizon clipping
-		result.assign( vec3( LTC_ClippedSphereFormFactor( { f: vectorFormFactor } ) ) );
-
-	} );
-
-	return result;
-
-} ).setLayout( {
-	name: 'LTC_Evaluate',
-	type: 'vec3',
-	inputs: [
-		{ name: 'N', type: 'vec3' },
-		{ name: 'V', type: 'vec3' },
-		{ name: 'P', type: 'vec3' },
-		{ name: 'mInv', type: 'mat3' },
-		{ name: 'p0', type: 'vec3' },
-		{ name: 'p1', type: 'vec3' },
-		{ name: 'p2', type: 'vec3' },
-		{ name: 'p3', type: 'vec3' }
-	]
-} );
-
-const LTC_Evaluate_Volume = /*@__PURE__*/ Fn( ( { P, p0, p1, p2, p3 } ) => {
-
-	// bail if point is on back side of plane of light
-	// assumes ccw winding order of light vertices
-	const v1 = p1.sub( p0 ).toVar();
-	const v2 = p3.sub( p0 ).toVar();
-
-	const lightNormal = v1.cross( v2 );
-	const result = vec3().toVar();
-
-	If( lightNormal.dot( P.sub( p0 ) ).greaterThanEqual( 0.0 ), () => {
-
-		// transform rect
-		// & project rect onto sphere
-		const coords0 = p0.sub( P ).normalize().toVar();
-		const coords1 = p1.sub( P ).normalize().toVar();
-		const coords2 = p2.sub( P ).normalize().toVar();
-		const coords3 = p3.sub( P ).normalize().toVar();
-
-		// calculate vector form factor
-		const vectorFormFactor = vec3( 0 ).toVar();
-		vectorFormFactor.addAssign( LTC_EdgeVectorFormFactor( { v1: coords0, v2: coords1 } ) );
-		vectorFormFactor.addAssign( LTC_EdgeVectorFormFactor( { v1: coords1, v2: coords2 } ) );
-		vectorFormFactor.addAssign( LTC_EdgeVectorFormFactor( { v1: coords2, v2: coords3 } ) );
-		vectorFormFactor.addAssign( LTC_EdgeVectorFormFactor( { v1: coords3, v2: coords0 } ) );
-
-		// adjust for horizon clipping
-		result.assign( vec3( LTC_ClippedSphereFormFactor( { f: vectorFormFactor.abs() } ) ) );
-
-	} );
-
-	return result;
-
-} ).setLayout( {
-	name: 'LTC_Evaluate',
-	type: 'vec3',
-	inputs: [
-		{ name: 'P', type: 'vec3' },
-		{ name: 'p0', type: 'vec3' },
-		{ name: 'p1', type: 'vec3' },
-		{ name: 'p2', type: 'vec3' },
-		{ name: 'p3', type: 'vec3' }
-	]
-} );
+  return result;
+}).setLayout({
+  name: "LTC_Evaluate",
+  type: "vec3",
+  inputs: [
+    { name: "P", type: "vec3" },
+    { name: "p0", type: "vec3" },
+    { name: "p1", type: "vec3" },
+    { name: "p2", type: "vec3" },
+    { name: "p3", type: "vec3" },
+  ],
+});
 
 export { LTC_Evaluate, LTC_Evaluate_Volume, LTC_Uv };

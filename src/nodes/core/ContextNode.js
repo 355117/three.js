@@ -1,176 +1,199 @@
-import Node from './Node.js';
-import { addMethodChaining, nodeProxy } from '../tsl/TSLCore.js';
+// 导入基础节点类
+import Node from "./Node.js";
+// 导入TSL核心功能：方法链式调用和节点代理
+import { addMethodChaining, nodeProxy } from "../tsl/TSLCore.js";
 
 /**
- * This node can be used as a context management component for another node.
- * {@link NodeBuilder} performs its node building process in a specific context and
- * this node allows the modify the context. A typical use case is to overwrite `getUV()` e.g.:
+ * 上下文节点类 - 用作另一个节点的上下文管理组件
+ * {@link NodeBuilder} 在特定上下文中执行节点构建过程，
+ * 此节点允许修改上下文。典型用例是重写 `getUV()` 方法，例如：
  *
  * ```js
- *node.context( { getUV: () => customCoord } );
- *```
+ * node.context( { getUV: () => customCoord } );
+ * ```
  * @augments Node
  */
 class ContextNode extends Node {
+  // 静态方法：返回节点类型标识符
+  static get type() {
+    return "ContextNode"; // 返回节点类型名称
+  }
 
-	static get type() {
+  /**
+   * 构造一个新的上下文节点
+   *
+   * @param {Node} node - 需要修改上下文的节点
+   * @param {Object} [value={}] - 修改后的上下文数据
+   */
+  constructor(node, value = {}) {
+    // 调用父类构造函数
+    super();
 
-		return 'ContextNode';
+    /**
+     * 类型测试标志 - 用于识别此节点为上下文节点
+     *
+     * @type {boolean}
+     * @readonly
+     * @default true
+     */
+    this.isContextNode = true;
 
-	}
+    /**
+     * 需要修改上下文的目标节点
+     *
+     * @type {Node}
+     */
+    this.node = node;
 
-	/**
-	 * Constructs a new context node.
-	 *
-	 * @param {Node} node - The node whose context should be modified.
-	 * @param {Object} [value={}] - The modified context data.
-	 */
-	constructor( node, value = {} ) {
+    /**
+     * 修改后的上下文数据对象
+     *
+     * @type {Object}
+     * @default {}
+     */
+    this.value = value;
+  }
 
-		super();
+  /**
+   * 获取作用域 - 重写此方法以确保返回目标节点的作用域引用
+   *
+   * @return {Node} 目标节点的作用域引用
+   */
+  getScope() {
+    // 返回目标节点的作用域
+    return this.node.getScope();
+  }
 
-		/**
-		 * This flag can be used for type testing.
-		 *
-		 * @type {boolean}
-		 * @readonly
-		 * @default true
-		 */
-		this.isContextNode = true;
+  /**
+   * 获取节点类型 - 重写此方法以确保返回目标节点的类型
+   *
+   * @param {NodeBuilder} builder - 当前节点构建器
+   * @return {string} 节点类型
+   */
+  getNodeType(builder) {
+    // 返回目标节点的类型
+    return this.node.getNodeType(builder);
+  }
 
-		/**
-		 * The node whose context should be modified.
-		 *
-		 * @type {Node}
-		 */
-		this.node = node;
+  /**
+   * 分析阶段 - 在修改后的上下文中分析目标节点
+   *
+   * @param {NodeBuilder} builder - 节点构建器
+   */
+  analyze(builder) {
+    // 保存当前上下文
+    const previousContext = builder.getContext();
 
-		/**
-		 * The modified context data.
-		 *
-		 * @type {Object}
-		 * @default {}
-		 */
-		this.value = value;
+    // 设置新的上下文（合并当前上下文和修改值）
+    builder.setContext({ ...builder.context, ...this.value });
 
-	}
+    // 在新上下文中构建目标节点
+    this.node.build(builder);
 
-	/**
-	 * This method is overwritten to ensure it returns the reference to {@link ContextNode#node}.
-	 *
-	 * @return {Node} A reference to {@link ContextNode#node}.
-	 */
-	getScope() {
+    // 恢复之前的上下文
+    builder.setContext(previousContext);
+  }
 
-		return this.node.getScope();
+  /**
+   * 设置阶段 - 在修改后的上下文中设置目标节点
+   *
+   * @param {NodeBuilder} builder - 节点构建器
+   */
+  setup(builder) {
+    // 保存当前上下文
+    const previousContext = builder.getContext();
 
-	}
+    // 设置新的上下文（合并当前上下文和修改值）
+    builder.setContext({ ...builder.context, ...this.value });
 
-	/**
-	 * This method is overwritten to ensure it returns the type of {@link ContextNode#node}.
-	 *
-	 * @param {NodeBuilder} builder - The current node builder.
-	 * @return {string} The node type.
-	 */
-	getNodeType( builder ) {
+    // 在新上下文中构建目标节点
+    this.node.build(builder);
 
-		return this.node.getNodeType( builder );
+    // 恢复之前的上下文
+    builder.setContext(previousContext);
+  }
 
-	}
+  /**
+   * 生成阶段 - 在修改后的上下文中生成目标节点的代码片段
+   *
+   * @param {NodeBuilder} builder - 节点构建器
+   * @param {string} output - 输出类型
+   * @return {string} 生成的代码片段
+   */
+  generate(builder, output) {
+    // 保存当前上下文
+    const previousContext = builder.getContext();
 
-	analyze( builder ) {
+    // 设置新的上下文（合并当前上下文和修改值）
+    builder.setContext({ ...builder.context, ...this.value });
 
-		const previousContext = builder.getContext();
+    // 在新上下文中构建目标节点并获取代码片段
+    const snippet = this.node.build(builder, output);
 
-		builder.setContext( { ...builder.context, ...this.value } );
+    // 恢复之前的上下文
+    builder.setContext(previousContext);
 
-		this.node.build( builder );
-
-		builder.setContext( previousContext );
-
-	}
-
-	setup( builder ) {
-
-		const previousContext = builder.getContext();
-
-		builder.setContext( { ...builder.context, ...this.value } );
-
-		this.node.build( builder );
-
-		builder.setContext( previousContext );
-
-	}
-
-	generate( builder, output ) {
-
-		const previousContext = builder.getContext();
-
-		builder.setContext( { ...builder.context, ...this.value } );
-
-		const snippet = this.node.build( builder, output );
-
-		builder.setContext( previousContext );
-
-		return snippet;
-
-	}
-
+    // 返回生成的代码片段
+    return snippet;
+  }
 }
 
+// 导出上下文节点类作为默认导出
 export default ContextNode;
 
 /**
- * TSL function for creating a context node.
+ * TSL函数：创建上下文节点
  *
  * @tsl
  * @function
- * @param {Node} node - The node whose context should be modified.
- * @param {Object} [value={}] - The modified context data.
- * @returns {ContextNode}
+ * @param {Node} node - 需要修改上下文的节点
+ * @param {Object} [value={}] - 修改后的上下文数据
+ * @returns {ContextNode} 上下文节点实例
  */
-export const context = /*@__PURE__*/ nodeProxy( ContextNode ).setParameterLength( 1, 2 );
+export const context = /*@__PURE__*/ nodeProxy(ContextNode).setParameterLength(1, 2);
 
 /**
- * TSL function for defining a uniformFlow context value for a given node.
+ * TSL函数：为给定节点定义统一流程上下文值
+ * 确保节点的所有依赖项都在统一的控制流路径中执行
  *
  * @tsl
  * @function
- * @param {Node} node - The node whose dependencies should all execute within a uniform control-flow path.
- * @returns {ContextNode}
+ * @param {Node} node - 需要在统一控制流路径中执行依赖项的节点
+ * @returns {ContextNode} 配置了统一流程的上下文节点
  */
-export const uniformFlow = ( node ) => context( node, { uniformFlow: true } );
+export const uniformFlow = (node) => context(node, { uniformFlow: true });
 
 /**
- * TSL function for defining a name for the context value for a given node.
+ * TSL函数：为给定节点的上下文值定义名称
  *
  * @tsl
  * @function
- * @param {Node} node - The node whose context should be modified.
- * @param {string} name - The name to set.
- * @returns {ContextNode}
+ * @param {Node} node - 需要修改上下文的节点
+ * @param {string} name - 要设置的名称
+ * @returns {ContextNode} 配置了名称的上下文节点
  */
-export const setName = ( node, name ) => context( node, { nodeName: name } );
+export const setName = (node, name) => context(node, { nodeName: name });
 
 /**
- * TSL function for defining a label context value for a given node.
+ * TSL函数：为给定节点定义标签上下文值（已弃用）
  *
  * @tsl
  * @function
- * @deprecated
- * @param {Node} node - The node whose context should be modified.
- * @param {string} name - The name/label to set.
- * @returns {ContextNode}
+ * @deprecated 此函数已弃用，请使用 setName() 替代
+ * @param {Node} node - 需要修改上下文的节点
+ * @param {string} name - 要设置的名称/标签
+ * @returns {ContextNode} 配置了标签的上下文节点
  */
-export function label( node, name ) {
+export function label(node, name) {
+  // 输出弃用警告信息
+  console.warn('THREE.TSL: "label()" has been deprecated. Use "setName()" instead.'); // @deprecated r179
 
-	console.warn( 'THREE.TSL: "label()" has been deprecated. Use "setName()" instead.' ); // @deprecated r179
-
-	return setName( node, name );
-
+  // 调用新的setName函数
+  return setName(node, name);
 }
 
-addMethodChaining( 'context', context );
-addMethodChaining( 'label', label );
-addMethodChaining( 'uniformFlow', uniformFlow );
-addMethodChaining( 'setName', setName );
+// 为各个函数添加方法链式调用支持
+addMethodChaining("context", context); // 添加context方法链
+addMethodChaining("label", label); // 添加label方法链（已弃用）
+addMethodChaining("uniformFlow", uniformFlow); // 添加uniformFlow方法链
+addMethodChaining("setName", setName); // 添加setName方法链

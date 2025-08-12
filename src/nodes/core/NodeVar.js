@@ -1,60 +1,55 @@
 /**
- * {@link NodeBuilder} is going to create instances of this class during the build process
- * of nodes. They represent the final shader variables that are going to be generated
- * by the builder. A dictionary of node variables is maintained in {@link NodeBuilder#vars} for
- * this purpose.
+ * {@link NodeBuilder} 在节点构建过程中会创建此类的实例。
+ * 它们代表构建器将要生成的最终着色器变量。
+ * 为此目的，在 {@link NodeBuilder#vars} 中维护了一个节点变量字典。
  */
 class NodeVar {
+  /**
+   * 构造一个新的节点变量。
+   *
+   * @param {string} name - 变量的名称。
+   * @param {string} type - 变量的类型。
+   * @param {boolean} [readOnly=false] - 只读标志。
+   * @param {?number} [count=null] - 大小。
+   */
+  constructor(name, type, readOnly = false, count = null) {
+    /**
+     * 此标志可用于类型测试。
+     *
+     * @type {boolean}
+     * @readonly
+     * @default true
+     */
+    this.isNodeVar = true; // 标识这是一个节点变量对象
 
-	/**
-	 * Constructs a new node variable.
-	 *
-	 * @param {string} name - The name of the variable.
-	 * @param {string} type - The type of the variable.
-	 * @param {boolean} [readOnly=false] - The read-only flag.
-	 * @param {?number} [count=null] - The size.
-	 */
-	constructor( name, type, readOnly = false, count = null ) {
+    /**
+     * 变量的名称。
+     *
+     * @type {string}
+     */
+    this.name = name; // 存储变量名称
 
-		/**
-		 * This flag can be used for type testing.
-		 *
-		 * @type {boolean}
-		 * @readonly
-		 * @default true
-		 */
-		this.isNodeVar = true;
+    /**
+     * 变量的类型。
+     *
+     * @type {string}
+     */
+    this.type = type; // 存储变量类型（如 float、vec3、mat4 等）
 
-		/**
-		 * The name of the variable.
-		 *
-		 * @type {string}
-		 */
-		this.name = name;
+    /**
+     * 只读标志。
+     *
+     * @type {boolean}
+     */
+    this.readOnly = readOnly; // 标识变量是否为只读
 
-		/**
-		 * The type of the variable.
-		 *
-		 * @type {string}
-		 */
-		this.type = type;
-
-		/**
-		 *  The read-only flag.
-		 *
-		 * @type {boolean}
-		 */
-		this.readOnly = readOnly;
-
-		/**
-		 * The size.
-		 *
-		 * @type {?number}
-		 */
-		this.count = count;
-
-	}
-
+    /**
+     * 大小。
+     *
+     * @type {?number}
+     */
+    this.count = count; // 存储变量的大小（用于数组等）
+  }
 }
 
-export default NodeVar;
+export default NodeVar; // 导出 NodeVar 类作为默认导出

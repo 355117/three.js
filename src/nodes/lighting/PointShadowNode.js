@@ -1,162 +1,201 @@
-import ShadowNode from './ShadowNode.js';
-import { uniform } from '../core/UniformNode.js';
-import { float, vec2, If, Fn, nodeObject } from '../tsl/TSLBase.js';
-import { reference } from '../accessors/ReferenceNode.js';
-import { texture } from '../accessors/TextureNode.js';
-import { max, abs, sign } from '../math/MathNode.js';
-import { sub, div } from '../math/OperatorNode.js';
-import { renderGroup } from '../core/UniformGroupNode.js';
-import { Vector2 } from '../../math/Vector2.js';
-import { Vector4 } from '../../math/Vector4.js';
-import { Color } from '../../math/Color.js';
-import { BasicShadowMap } from '../../constants.js';
+// 从阴影节点模块导入基础类
+import ShadowNode from "./ShadowNode.js";
+// 从统一变量节点模块导入uniform函数
+import { uniform } from "../core/UniformNode.js";
+// 从TSL基础模块导入基础类型和函数
+import { float, vec2, If, Fn, nodeObject } from "../tsl/TSLBase.js";
+// 从引用节点访问器模块导入reference函数
+import { reference } from "../accessors/ReferenceNode.js";
+// 从纹理访问器模块导入texture函数
+import { texture } from "../accessors/TextureNode.js";
+// 从数学节点模块导入数学函数
+import { max, abs, sign } from "../math/MathNode.js";
+// 从操作符节点模块导入减法和除法操作
+import { sub, div } from "../math/OperatorNode.js";
+// 从统一变量组节点模块导入渲染组
+import { renderGroup } from "../core/UniformGroupNode.js";
+// 从数学模块导入向量和颜色类
+import { Vector2 } from "../../math/Vector2.js";
+import { Vector4 } from "../../math/Vector4.js";
+import { Color } from "../../math/Color.js";
+// 从常量模块导入基础阴影贴图类型
+import { BasicShadowMap } from "../../constants.js";
 
+// 用于清除颜色的常量
 const _clearColor = /*@__PURE__*/ new Color();
 
-// cubeToUV() maps a 3D direction vector suitable for cube texture mapping to a 2D
-// vector suitable for 2D texture mapping. This code uses the following layout for the
-// 2D texture:
-//
-// xzXZ
-//  y Y
-//
-// Y - Positive y direction
-// y - Negative y direction
-// X - Positive x direction
-// x - Negative x direction
-// Z - Positive z direction
-// z - Negative z direction
-//
-// Source and test bed:
-// https://gist.github.com/tschw/da10c43c467ce8afd0c4
+/**
+ * 立方体到UV坐标转换函数
+ *
+ * cubeToUV() 将适用于立方体纹理映射的3D方向向量映射为
+ * 适用于2D纹理映射的2D向量。此代码使用以下2D纹理布局：
+ *
+ * 纹理布局：
+ * xzXZ
+ *  y Y
+ *
+ * 面的含义：
+ * Y - 正Y方向（上）
+ * y - 负Y方向（下）
+ * X - 正X方向（右）
+ * x - 负X方向（左）
+ * Z - 正Z方向（前）
+ * z - 负Z方向（后）
+ *
+ * 这种布局将立方体的6个面展开到一个2D纹理中，
+ * 用于点光源阴影贴图的存储和采样。
+ *
+ * 参考资料和测试平台：
+ * https://gist.github.com/tschw/da10c43c467ce8afd0c4
+ */
 
-export const cubeToUV = /*@__PURE__*/ Fn( ( [ pos, texelSizeY ] ) => {
+export const cubeToUV = /*@__PURE__*/ Fn(([pos, texelSizeY]) => {
+  const v = pos.toVar();
 
-	const v = pos.toVar();
+  // Number of texels to avoid at the edge of each square
 
-	// Number of texels to avoid at the edge of each square
+  const absV = abs(v);
 
-	const absV = abs( v );
+  // Intersect unit cube
 
-	// Intersect unit cube
+  const scaleToCube = div(1.0, max(absV.x, max(absV.y, absV.z)));
+  absV.mulAssign(scaleToCube);
 
-	const scaleToCube = div( 1.0, max( absV.x, max( absV.y, absV.z ) ) );
-	absV.mulAssign( scaleToCube );
+  // Apply scale to avoid seams
 
-	// Apply scale to avoid seams
+  // two texels less per square (one texel will do for NEAREST)
+  v.mulAssign(scaleToCube.mul(texelSizeY.mul(2).oneMinus()));
 
-	// two texels less per square (one texel will do for NEAREST)
-	v.mulAssign( scaleToCube.mul( texelSizeY.mul( 2 ).oneMinus() ) );
+  // Unwrap
 
-	// Unwrap
+  // space: -1 ... 1 range for each square
+  //
+  // #X##		dim    := ( 4 , 2 )
+  //  # #		center := ( 1 , 1 )
 
-	// space: -1 ... 1 range for each square
-	//
-	// #X##		dim    := ( 4 , 2 )
-	//  # #		center := ( 1 , 1 )
+  const planar = vec2(v.xy).toVar();
 
-	const planar = vec2( v.xy ).toVar();
+  const almostATexel = texelSizeY.mul(1.5);
+  const almostOne = almostATexel.oneMinus();
 
-	const almostATexel = texelSizeY.mul( 1.5 );
-	const almostOne = almostATexel.oneMinus();
+  If(absV.z.greaterThanEqual(almostOne), () => {
+    If(v.z.greaterThan(0.0), () => {
+      planar.x.assign(sub(4.0, v.x));
+    });
+  })
+    .ElseIf(absV.x.greaterThanEqual(almostOne), () => {
+      const signX = sign(v.x);
+      planar.x.assign(v.z.mul(signX).add(signX.mul(2.0)));
+    })
+    .ElseIf(absV.y.greaterThanEqual(almostOne), () => {
+      const signY = sign(v.y);
+      planar.x.assign(v.x.add(signY.mul(2.0)).add(2.0));
+      planar.y.assign(v.z.mul(signY).sub(2.0));
+    });
 
-	If( absV.z.greaterThanEqual( almostOne ), () => {
+  // Transform to UV space
 
-		If( v.z.greaterThan( 0.0 ), () => {
+  // scale := 0.5 / dim
+  // translate := ( center + 0.5 ) / dim
+  return vec2(0.125, 0.25).mul(planar).add(vec2(0.375, 0.75)).flipY();
+}).setLayout({
+  name: "cubeToUV",
+  type: "vec2",
+  inputs: [
+    { name: "pos", type: "vec3" },
+    { name: "texelSizeY", type: "float" },
+  ],
+});
 
-			planar.x.assign( sub( 4.0, v.x ) );
+/**
+ * 基础点光源阴影过滤函数
+ *
+ * 执行简单的点光源阴影采样，不使用PCF（百分比接近过滤）。
+ * 直接比较深度值来确定是否在阴影中。
+ *
+ * @param {Object} params - 参数对象
+ * @param {Node} params.depthTexture - 深度纹理（阴影贴图）
+ * @param {Node} params.bd3D - 基础方向3D向量
+ * @param {Node} params.dp - 标准化深度值
+ * @param {Node} params.texelSize - 纹素大小
+ * @returns {Node} 阴影因子（0=阴影，1=无阴影）
+ */
+export const BasicPointShadowFilter = /*@__PURE__*/ Fn(({ depthTexture, bd3D, dp, texelSize }) => {
+  // 将3D方向转换为UV坐标并采样深度纹理，然后与当前深度比较
+  return texture(depthTexture, cubeToUV(bd3D, texelSize.y)).compare(dp);
+});
 
-		} );
+/**
+ * 点光源阴影过滤函数（带PCF）
+ *
+ * 使用PCF（百分比接近过滤）技术的点光源阴影采样。
+ * 通过对周围9个采样点进行平均来产生柔和的阴影边缘。
+ *
+ * @param {Object} params - 参数对象
+ * @param {Node} params.depthTexture - 深度纹理（阴影贴图）
+ * @param {Node} params.bd3D - 基础方向3D向量
+ * @param {Node} params.dp - 标准化深度值
+ * @param {Node} params.texelSize - 纹素大小
+ * @param {Node} params.shadow - 阴影对象引用
+ * @returns {Node} 平滑的阴影因子（0=阴影，1=无阴影）
+ */
+export const PointShadowFilter = /*@__PURE__*/ Fn(({ depthTexture, bd3D, dp, texelSize, shadow }) => {
+  // 获取阴影半径参数，控制PCF采样范围
+  const radius = reference("radius", "float", shadow).setGroup(renderGroup);
+  // 计算采样偏移量，基于半径和纹素大小
+  const offset = vec2(-1.0, 1.0).mul(radius).mul(texelSize.y);
 
-	} ).ElseIf( absV.x.greaterThanEqual( almostOne ), () => {
+  // 执行9点PCF采样，对周围8个点加上中心点进行采样
+  // 每个采样点都进行深度比较，最后取平均值
+  return texture(depthTexture, cubeToUV(bd3D.add(offset.xyy), texelSize.y))
+    .compare(dp)
+    .add(texture(depthTexture, cubeToUV(bd3D.add(offset.yyy), texelSize.y)).compare(dp))
+    .add(texture(depthTexture, cubeToUV(bd3D.add(offset.xyx), texelSize.y)).compare(dp))
+    .add(texture(depthTexture, cubeToUV(bd3D.add(offset.yyx), texelSize.y)).compare(dp))
+    .add(texture(depthTexture, cubeToUV(bd3D, texelSize.y)).compare(dp)) // 中心点
+    .add(texture(depthTexture, cubeToUV(bd3D.add(offset.xxy), texelSize.y)).compare(dp))
+    .add(texture(depthTexture, cubeToUV(bd3D.add(offset.yxy), texelSize.y)).compare(dp))
+    .add(texture(depthTexture, cubeToUV(bd3D.add(offset.xxx), texelSize.y)).compare(dp))
+    .add(texture(depthTexture, cubeToUV(bd3D.add(offset.yxx), texelSize.y)).compare(dp))
+    .mul(1.0 / 9.0); // 计算9个采样点的平均值
+});
 
-		const signX = sign( v.x );
-		planar.x.assign( v.z.mul( signX ).add( signX.mul( 2.0 ) ) );
+const pointShadowFilter = /*@__PURE__*/ Fn(({ filterFn, depthTexture, shadowCoord, shadow }) => {
+  // for point lights, the uniform @vShadowCoord is re-purposed to hold
+  // the vector from the light to the world-space position of the fragment.
+  const lightToPosition = shadowCoord.xyz.toVar();
+  const lightToPositionLength = lightToPosition.length();
 
-	} ).ElseIf( absV.y.greaterThanEqual( almostOne ), () => {
+  const cameraNearLocal = uniform("float")
+    .setGroup(renderGroup)
+    .onRenderUpdate(() => shadow.camera.near);
+  const cameraFarLocal = uniform("float")
+    .setGroup(renderGroup)
+    .onRenderUpdate(() => shadow.camera.far);
+  const bias = reference("bias", "float", shadow).setGroup(renderGroup);
+  const mapSize = uniform(shadow.mapSize).setGroup(renderGroup);
 
-		const signY = sign( v.y );
-		planar.x.assign( v.x.add( signY.mul( 2.0 ) ).add( 2.0 ) );
-		planar.y.assign( v.z.mul( signY ).sub( 2.0 ) );
+  const result = float(1.0).toVar();
 
-	} );
+  If(lightToPositionLength.sub(cameraFarLocal).lessThanEqual(0.0).and(lightToPositionLength.sub(cameraNearLocal).greaterThanEqual(0.0)), () => {
+    // dp = normalized distance from light to fragment position
+    const dp = lightToPositionLength.sub(cameraNearLocal).div(cameraFarLocal.sub(cameraNearLocal)).toVar(); // need to clamp?
+    dp.addAssign(bias);
 
-	// Transform to UV space
+    // bd3D = base direction 3D
+    const bd3D = lightToPosition.normalize();
+    const texelSize = vec2(1.0).div(mapSize.mul(vec2(4.0, 2.0)));
 
-	// scale := 0.5 / dim
-	// translate := ( center + 0.5 ) / dim
-	return vec2( 0.125, 0.25 ).mul( planar ).add( vec2( 0.375, 0.75 ) ).flipY();
+    // percentage-closer filtering
+    result.assign(filterFn({ depthTexture, bd3D, dp, texelSize, shadow }));
+  });
 
-} ).setLayout( {
-	name: 'cubeToUV',
-	type: 'vec2',
-	inputs: [
-		{ name: 'pos', type: 'vec3' },
-		{ name: 'texelSizeY', type: 'float' }
-	]
-} );
-
-export const BasicPointShadowFilter = /*@__PURE__*/ Fn( ( { depthTexture, bd3D, dp, texelSize } ) => {
-
-	return texture( depthTexture, cubeToUV( bd3D, texelSize.y ) ).compare( dp );
-
-} );
-
-export const PointShadowFilter = /*@__PURE__*/ Fn( ( { depthTexture, bd3D, dp, texelSize, shadow } ) => {
-
-	const radius = reference( 'radius', 'float', shadow ).setGroup( renderGroup );
-	const offset = vec2( - 1.0, 1.0 ).mul( radius ).mul( texelSize.y );
-
-	return texture( depthTexture, cubeToUV( bd3D.add( offset.xyy ), texelSize.y ) ).compare( dp )
-		.add( texture( depthTexture, cubeToUV( bd3D.add( offset.yyy ), texelSize.y ) ).compare( dp ) )
-		.add( texture( depthTexture, cubeToUV( bd3D.add( offset.xyx ), texelSize.y ) ).compare( dp ) )
-		.add( texture( depthTexture, cubeToUV( bd3D.add( offset.yyx ), texelSize.y ) ).compare( dp ) )
-		.add( texture( depthTexture, cubeToUV( bd3D, texelSize.y ) ).compare( dp ) )
-		.add( texture( depthTexture, cubeToUV( bd3D.add( offset.xxy ), texelSize.y ) ).compare( dp ) )
-		.add( texture( depthTexture, cubeToUV( bd3D.add( offset.yxy ), texelSize.y ) ).compare( dp ) )
-		.add( texture( depthTexture, cubeToUV( bd3D.add( offset.xxx ), texelSize.y ) ).compare( dp ) )
-		.add( texture( depthTexture, cubeToUV( bd3D.add( offset.yxx ), texelSize.y ) ).compare( dp ) )
-		.mul( 1.0 / 9.0 );
-
-} );
-
-const pointShadowFilter = /*@__PURE__*/ Fn( ( { filterFn, depthTexture, shadowCoord, shadow } ) => {
-
-	// for point lights, the uniform @vShadowCoord is re-purposed to hold
-	// the vector from the light to the world-space position of the fragment.
-	const lightToPosition = shadowCoord.xyz.toVar();
-	const lightToPositionLength = lightToPosition.length();
-
-	const cameraNearLocal = uniform( 'float' ).setGroup( renderGroup ).onRenderUpdate( () => shadow.camera.near );
-	const cameraFarLocal = uniform( 'float' ).setGroup( renderGroup ).onRenderUpdate( () => shadow.camera.far );
-	const bias = reference( 'bias', 'float', shadow ).setGroup( renderGroup );
-	const mapSize = uniform( shadow.mapSize ).setGroup( renderGroup );
-
-	const result = float( 1.0 ).toVar();
-
-	If( lightToPositionLength.sub( cameraFarLocal ).lessThanEqual( 0.0 ).and( lightToPositionLength.sub( cameraNearLocal ).greaterThanEqual( 0.0 ) ), () => {
-
-		// dp = normalized distance from light to fragment position
-		const dp = lightToPositionLength.sub( cameraNearLocal ).div( cameraFarLocal.sub( cameraNearLocal ) ).toVar(); // need to clamp?
-		dp.addAssign( bias );
-
-		// bd3D = base direction 3D
-		const bd3D = lightToPosition.normalize();
-		const texelSize = vec2( 1.0 ).div( mapSize.mul( vec2( 4.0, 2.0 ) ) );
-
-		// percentage-closer filtering
-		result.assign( filterFn( { depthTexture, bd3D, dp, texelSize, shadow } ) );
-
-	} );
-
-	return result;
-
-} );
+  return result;
+});
 
 const _viewport = /*@__PURE__*/ new Vector4();
 const _viewportSize = /*@__PURE__*/ new Vector2();
 const _shadowMapSize = /*@__PURE__*/ new Vector2();
-
 
 /**
  * Represents the shadow implementation for point light nodes.
@@ -164,132 +203,111 @@ const _shadowMapSize = /*@__PURE__*/ new Vector2();
  * @augments ShadowNode
  */
 class PointShadowNode extends ShadowNode {
+  static get type() {
+    return "PointShadowNode";
+  }
 
-	static get type() {
+  /**
+   * Constructs a new point shadow node.
+   *
+   * @param {PointLight} light - The shadow casting point light.
+   * @param {?PointLightShadow} [shadow=null] - An optional point light shadow.
+   */
+  constructor(light, shadow = null) {
+    super(light, shadow);
+  }
 
-		return 'PointShadowNode';
+  /**
+   * Overwrites the default implementation to return point light shadow specific
+   * filtering functions.
+   *
+   * @param {number} type - The shadow type.
+   * @return {Function} The filtering function.
+   */
+  getShadowFilterFn(type) {
+    return type === BasicShadowMap ? BasicPointShadowFilter : PointShadowFilter;
+  }
 
-	}
+  /**
+   * Overwrites the default implementation so the unaltered shadow position is used.
+   *
+   * @param {NodeBuilder} builder - A reference to the current node builder.
+   * @param {Node<vec3>} shadowPosition - A node representing the shadow position.
+   * @return {Node<vec3>} The shadow coordinates.
+   */
+  setupShadowCoord(builder, shadowPosition) {
+    return shadowPosition;
+  }
 
-	/**
-	 * Constructs a new point shadow node.
-	 *
-	 * @param {PointLight} light - The shadow casting point light.
-	 * @param {?PointLightShadow} [shadow=null] - An optional point light shadow.
-	 */
-	constructor( light, shadow = null ) {
+  /**
+   * Overwrites the default implementation to only use point light specific
+   * shadow filter functions.
+   *
+   * @param {NodeBuilder} builder - A reference to the current node builder.
+   * @param {Object} inputs - A configuration object that defines the shadow filtering.
+   * @param {Function} inputs.filterFn - This function defines the filtering type of the shadow map e.g. PCF.
+   * @param {Texture} inputs.shadowTexture - A reference to the shadow map's texture.
+   * @param {DepthTexture} inputs.depthTexture - A reference to the shadow map's texture data.
+   * @param {Node<vec3>} inputs.shadowCoord - Shadow coordinates which are used to sample from the shadow map.
+   * @param {LightShadow} inputs.shadow - The light shadow.
+   * @return {Node<float>} The result node of the shadow filtering.
+   */
+  setupShadowFilter(builder, { filterFn, shadowTexture, depthTexture, shadowCoord, shadow }) {
+    return pointShadowFilter({ filterFn, shadowTexture, depthTexture, shadowCoord, shadow });
+  }
 
-		super( light, shadow );
+  /**
+   * Overwrites the default implementation with point light specific
+   * rendering code.
+   *
+   * @param {NodeFrame} frame - A reference to the current node frame.
+   */
+  renderShadow(frame) {
+    const { shadow, shadowMap, light } = this;
+    const { renderer, scene } = frame;
 
-	}
+    const shadowFrameExtents = shadow.getFrameExtents();
 
-	/**
-	 * Overwrites the default implementation to return point light shadow specific
-	 * filtering functions.
-	 *
-	 * @param {number} type - The shadow type.
-	 * @return {Function} The filtering function.
-	 */
-	getShadowFilterFn( type ) {
+    _shadowMapSize.copy(shadow.mapSize);
+    _shadowMapSize.multiply(shadowFrameExtents);
 
-		return type === BasicShadowMap ? BasicPointShadowFilter : PointShadowFilter;
+    shadowMap.setSize(_shadowMapSize.width, _shadowMapSize.height);
 
-	}
+    _viewportSize.copy(shadow.mapSize);
 
-	/**
-	 * Overwrites the default implementation so the unaltered shadow position is used.
-	 *
-	 * @param {NodeBuilder} builder - A reference to the current node builder.
-	 * @param {Node<vec3>} shadowPosition - A node representing the shadow position.
-	 * @return {Node<vec3>} The shadow coordinates.
-	 */
-	setupShadowCoord( builder, shadowPosition ) {
+    //
 
-		return shadowPosition;
+    const previousAutoClear = renderer.autoClear;
 
-	}
+    const previousClearColor = renderer.getClearColor(_clearColor);
+    const previousClearAlpha = renderer.getClearAlpha();
 
-	/**
-	 * Overwrites the default implementation to only use point light specific
-	 * shadow filter functions.
-	 *
-	 * @param {NodeBuilder} builder - A reference to the current node builder.
-	 * @param {Object} inputs - A configuration object that defines the shadow filtering.
-	 * @param {Function} inputs.filterFn - This function defines the filtering type of the shadow map e.g. PCF.
-	 * @param {Texture} inputs.shadowTexture - A reference to the shadow map's texture.
-	 * @param {DepthTexture} inputs.depthTexture - A reference to the shadow map's texture data.
-	 * @param {Node<vec3>} inputs.shadowCoord - Shadow coordinates which are used to sample from the shadow map.
-	 * @param {LightShadow} inputs.shadow - The light shadow.
-	 * @return {Node<float>} The result node of the shadow filtering.
-	 */
-	setupShadowFilter( builder, { filterFn, shadowTexture, depthTexture, shadowCoord, shadow } ) {
+    renderer.autoClear = false;
+    renderer.setClearColor(shadow.clearColor, shadow.clearAlpha);
+    renderer.clear();
 
-		return pointShadowFilter( { filterFn, shadowTexture, depthTexture, shadowCoord, shadow } );
+    const viewportCount = shadow.getViewportCount();
 
-	}
+    for (let vp = 0; vp < viewportCount; vp++) {
+      const viewport = shadow.getViewport(vp);
 
-	/**
-	 * Overwrites the default implementation with point light specific
-	 * rendering code.
-	 *
-	 * @param {NodeFrame} frame - A reference to the current node frame.
-	 */
-	renderShadow( frame ) {
+      const x = _viewportSize.x * viewport.x;
+      const y = _shadowMapSize.y - _viewportSize.y - _viewportSize.y * viewport.y;
 
-		const { shadow, shadowMap, light } = this;
-		const { renderer, scene } = frame;
+      _viewport.set(x, y, _viewportSize.x * viewport.z, _viewportSize.y * viewport.w);
 
-		const shadowFrameExtents = shadow.getFrameExtents();
+      shadowMap.viewport.copy(_viewport);
 
-		_shadowMapSize.copy( shadow.mapSize );
-		_shadowMapSize.multiply( shadowFrameExtents );
+      shadow.updateMatrices(light, vp);
 
-		shadowMap.setSize( _shadowMapSize.width, _shadowMapSize.height );
+      renderer.render(scene, shadow.camera);
+    }
 
-		_viewportSize.copy( shadow.mapSize );
+    //
 
-		//
-
-		const previousAutoClear = renderer.autoClear;
-
-		const previousClearColor = renderer.getClearColor( _clearColor );
-		const previousClearAlpha = renderer.getClearAlpha();
-
-		renderer.autoClear = false;
-		renderer.setClearColor( shadow.clearColor, shadow.clearAlpha );
-		renderer.clear();
-
-		const viewportCount = shadow.getViewportCount();
-
-		for ( let vp = 0; vp < viewportCount; vp ++ ) {
-
-			const viewport = shadow.getViewport( vp );
-
-			const x = _viewportSize.x * viewport.x;
-			const y = _shadowMapSize.y - _viewportSize.y - ( _viewportSize.y * viewport.y );
-
-			_viewport.set(
-				x,
-				y,
-				_viewportSize.x * viewport.z,
-				_viewportSize.y * viewport.w
-			);
-
-			shadowMap.viewport.copy( _viewport );
-
-			shadow.updateMatrices( light, vp );
-
-			renderer.render( scene, shadow.camera );
-
-		}
-
-		//
-
-		renderer.autoClear = previousAutoClear;
-		renderer.setClearColor( previousClearColor, previousClearAlpha );
-
-	}
-
+    renderer.autoClear = previousAutoClear;
+    renderer.setClearColor(previousClearColor, previousClearAlpha);
+  }
 }
 
 export default PointShadowNode;
@@ -303,4 +321,4 @@ export default PointShadowNode;
  * @param {?PointLightShadow} [shadow=null] - An optional point light shadow.
  * @return {PointShadowNode} The created point shadow node.
  */
-export const pointShadow = ( light, shadow ) => nodeObject( new PointShadowNode( light, shadow ) );
+export const pointShadow = (light, shadow) => nodeObject(new PointShadowNode(light, shadow));

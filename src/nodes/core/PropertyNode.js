@@ -1,344 +1,343 @@
-import Node from './Node.js';
-import { nodeImmutable, nodeObject } from '../tsl/TSLCore.js';
+import Node from "./Node.js"; // 导入Node基类
+import { nodeImmutable, nodeObject } from "../tsl/TSLCore.js"; // 导入TSL核心函数
 
 /**
- * This class represents a shader property. It can be used
- * to explicitly define a property and assign a value to it.
+ * 此类表示着色器属性。它可以用于
+ * 显式定义属性并为其分配值。
  *
  * ```js
  * const threshold = property( 'float', 'threshold' ).assign( THRESHOLD );
  *```
- * `PropertyNode` is used by the engine to predefined common material properties
- * for TSL code.
+ * `PropertyNode` 被引擎用于为TSL代码预定义常见的材质属性。
  *
  * @augments Node
  */
 class PropertyNode extends Node {
+  // 定义PropertyNode类，继承自Node
 
-	static get type() {
+  static get type() {
+    // 静态getter方法，返回节点类型
 
-		return 'PropertyNode';
+    return "PropertyNode"; // 返回节点类型字符串
+  }
 
-	}
+  /**
+   * 构造一个新的属性节点。
+   *
+   * @param {string} nodeType - 节点的类型。
+   * @param {?string} [name=null] - 着色器中属性的名称。
+   * @param {boolean} [varying=false] - 此属性是否为变量。
+   */
+  constructor(nodeType, name = null, varying = false) {
+    // 构造函数，接受节点类型、名称和变量标志
 
-	/**
-	 * Constructs a new property node.
-	 *
-	 * @param {string} nodeType - The type of the node.
-	 * @param {?string} [name=null] - The name of the property in the shader.
-	 * @param {boolean} [varying=false] - Whether this property is a varying or not.
-	 */
-	constructor( nodeType, name = null, varying = false ) {
+    super(nodeType); // 调用父类构造函数
 
-		super( nodeType );
+    /**
+     * 着色器中属性的名称。如果未定义名称，
+     * 节点系统会自动生成一个。
+     *
+     * @type {?string}
+     * @default null
+     */
+    this.name = name; // 存储属性名称
 
-		/**
-		 * The name of the property in the shader. If no name is defined,
-		 * the node system auto-generates one.
-		 *
-		 * @type {?string}
-		 * @default null
-		 */
-		this.name = name;
+    /**
+     * 此属性是否为变量。
+     *
+     * @type {boolean}
+     * @default false
+     */
+    this.varying = varying; // 存储变量标志
 
-		/**
-		 * Whether this property is a varying or not.
-		 *
-		 * @type {boolean}
-		 * @default false
-		 */
-		this.varying = varying;
+    /**
+     * 此标志可用于类型测试。
+     *
+     * @type {boolean}
+     * @readonly
+     * @default true
+     */
+    this.isPropertyNode = true; // 标识这是一个属性节点对象
 
-		/**
-		 * This flag can be used for type testing.
-		 *
-		 * @type {boolean}
-		 * @readonly
-		 * @default true
-		 */
-		this.isPropertyNode = true;
+    /**
+     * 此标志用于全局缓存。
+     *
+     * @type {boolean}
+     * @default true
+     */
+    this.global = true; // 标识是否为全局属性
+  }
 
-		/**
-		 * This flag is used for global cache.
-		 *
-		 * @type {boolean}
-		 * @default true
-		 */
-		this.global = true;
+  getHash(builder) {
+    // 获取哈希值的方法
 
-	}
+    return this.name || super.getHash(builder); // 返回属性名称或父类哈希值
+  }
 
-	getHash( builder ) {
+  generate(builder) {
+    // 生成着色器代码的方法
 
-		return this.name || super.getHash( builder );
+    let nodeVar; // 声明节点变量
 
-	}
+    if (this.varying === true) {
+      // 如果是变量属性
 
-	generate( builder ) {
+      nodeVar = builder.getVaryingFromNode(this, this.name); // 获取变量节点
+      nodeVar.needsInterpolation = true; // 设置需要插值
+    } else {
+      // 如果是普通属性
 
-		let nodeVar;
+      nodeVar = builder.getVarFromNode(this, this.name); // 获取变量节点
+    }
 
-		if ( this.varying === true ) {
-
-			nodeVar = builder.getVaryingFromNode( this, this.name );
-			nodeVar.needsInterpolation = true;
-
-		} else {
-
-			nodeVar = builder.getVarFromNode( this, this.name );
-
-		}
-
-		return builder.getPropertyName( nodeVar );
-
-	}
-
+    return builder.getPropertyName(nodeVar); // 返回属性名称
+  }
 }
 
-export default PropertyNode;
+export default PropertyNode; // 导出PropertyNode类作为默认导出
 
 /**
- * TSL function for creating a property node.
+ * 用于创建属性节点的TSL函数。
  *
  * @tsl
  * @function
- * @param {string} type - The type of the node.
- * @param {?string} [name=null] - The name of the property in the shader.
+ * @param {string} type - 节点的类型。
+ * @param {?string} [name=null] - 着色器中属性的名称。
  * @returns {PropertyNode}
  */
-export const property = ( type, name ) => nodeObject( new PropertyNode( type, name ) );
+export const property = (type, name) => nodeObject(new PropertyNode(type, name)); // 导出property函数，用于创建属性节点
 
 /**
- * TSL function for creating a varying property node.
+ * 用于创建变量属性节点的TSL函数。
  *
  * @tsl
  * @function
- * @param {string} type - The type of the node.
- * @param {?string} [name=null] - The name of the varying in the shader.
+ * @param {string} type - 节点的类型。
+ * @param {?string} [name=null] - 着色器中变量的名称。
  * @returns {PropertyNode}
  */
-export const varyingProperty = ( type, name ) => nodeObject( new PropertyNode( type, name, true ) );
+export const varyingProperty = (type, name) => nodeObject(new PropertyNode(type, name, true)); // 导出varyingProperty函数，用于创建变量属性节点
 
 /**
- * TSL object that represents the shader variable `DiffuseColor`.
+ * 表示着色器变量 `DiffuseColor` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<vec4>}
  */
-export const diffuseColor = /*@__PURE__*/ nodeImmutable( PropertyNode, 'vec4', 'DiffuseColor' );
+export const diffuseColor = /*@__PURE__*/ nodeImmutable(PropertyNode, "vec4", "DiffuseColor"); // 导出漫反射颜色属性
 
 /**
- * TSL object that represents the shader variable `EmissiveColor`.
+ * 表示着色器变量 `EmissiveColor` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<vec3>}
  */
-export const emissive = /*@__PURE__*/ nodeImmutable( PropertyNode, 'vec3', 'EmissiveColor' );
+export const emissive = /*@__PURE__*/ nodeImmutable(PropertyNode, "vec3", "EmissiveColor"); // 导出自发光颜色属性
 
 /**
- * TSL object that represents the shader variable `Roughness`.
+ * 表示着色器变量 `Roughness` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<float>}
  */
-export const roughness = /*@__PURE__*/ nodeImmutable( PropertyNode, 'float', 'Roughness' );
+export const roughness = /*@__PURE__*/ nodeImmutable(PropertyNode, "float", "Roughness"); // 导出粗糙度属性
 
 /**
- * TSL object that represents the shader variable `Metalness`.
+ * 表示着色器变量 `Metalness` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<float>}
  */
-export const metalness = /*@__PURE__*/ nodeImmutable( PropertyNode, 'float', 'Metalness' );
+export const metalness = /*@__PURE__*/ nodeImmutable(PropertyNode, "float", "Metalness"); // 导出金属度属性
 
 /**
- * TSL object that represents the shader variable `Clearcoat`.
+ * 表示着色器变量 `Clearcoat` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<float>}
  */
-export const clearcoat = /*@__PURE__*/ nodeImmutable( PropertyNode, 'float', 'Clearcoat' );
+export const clearcoat = /*@__PURE__*/ nodeImmutable(PropertyNode, "float", "Clearcoat"); // 导出清漆属性
 
 /**
- * TSL object that represents the shader variable `ClearcoatRoughness`.
+ * 表示着色器变量 `ClearcoatRoughness` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<float>}
  */
-export const clearcoatRoughness = /*@__PURE__*/ nodeImmutable( PropertyNode, 'float', 'ClearcoatRoughness' );
+export const clearcoatRoughness = /*@__PURE__*/ nodeImmutable(PropertyNode, "float", "ClearcoatRoughness"); // 导出清漆粗糙度属性
 
 /**
- * TSL object that represents the shader variable `Sheen`.
+ * 表示着色器变量 `Sheen` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<vec3>}
  */
-export const sheen = /*@__PURE__*/ nodeImmutable( PropertyNode, 'vec3', 'Sheen' );
+export const sheen = /*@__PURE__*/ nodeImmutable(PropertyNode, "vec3", "Sheen"); // 导出光泽属性
 
 /**
- * TSL object that represents the shader variable `SheenRoughness`.
+ * 表示着色器变量 `SheenRoughness` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<float>}
  */
-export const sheenRoughness = /*@__PURE__*/ nodeImmutable( PropertyNode, 'float', 'SheenRoughness' );
+export const sheenRoughness = /*@__PURE__*/ nodeImmutable(PropertyNode, "float", "SheenRoughness"); // 导出光泽粗糙度属性
 
 /**
- * TSL object that represents the shader variable `Iridescence`.
+ * 表示着色器变量 `Iridescence` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<float>}
  */
-export const iridescence = /*@__PURE__*/ nodeImmutable( PropertyNode, 'float', 'Iridescence' );
+export const iridescence = /*@__PURE__*/ nodeImmutable(PropertyNode, "float", "Iridescence"); // 导出彩虹色属性
 
 /**
- * TSL object that represents the shader variable `IridescenceIOR`.
+ * 表示着色器变量 `IridescenceIOR` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<float>}
  */
-export const iridescenceIOR = /*@__PURE__*/ nodeImmutable( PropertyNode, 'float', 'IridescenceIOR' );
+export const iridescenceIOR = /*@__PURE__*/ nodeImmutable(PropertyNode, "float", "IridescenceIOR"); // 导出彩虹色折射率属性
 
 /**
- * TSL object that represents the shader variable `IridescenceThickness`.
+ * 表示着色器变量 `IridescenceThickness` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<float>}
  */
-export const iridescenceThickness = /*@__PURE__*/ nodeImmutable( PropertyNode, 'float', 'IridescenceThickness' );
+export const iridescenceThickness = /*@__PURE__*/ nodeImmutable(PropertyNode, "float", "IridescenceThickness"); // 导出彩虹色厚度属性
 
 /**
- * TSL object that represents the shader variable `AlphaT`.
+ * 表示着色器变量 `AlphaT` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<float>}
  */
-export const alphaT = /*@__PURE__*/ nodeImmutable( PropertyNode, 'float', 'AlphaT' );
+export const alphaT = /*@__PURE__*/ nodeImmutable(PropertyNode, "float", "AlphaT"); // 导出AlphaT属性
 
 /**
- * TSL object that represents the shader variable `Anisotropy`.
+ * 表示着色器变量 `Anisotropy` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<float>}
  */
-export const anisotropy = /*@__PURE__*/ nodeImmutable( PropertyNode, 'float', 'Anisotropy' );
+export const anisotropy = /*@__PURE__*/ nodeImmutable(PropertyNode, "float", "Anisotropy"); // 导出各向异性属性
 
 /**
- * TSL object that represents the shader variable `AnisotropyT`.
+ * 表示着色器变量 `AnisotropyT` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<vec3>}
  */
-export const anisotropyT = /*@__PURE__*/ nodeImmutable( PropertyNode, 'vec3', 'AnisotropyT' );
+export const anisotropyT = /*@__PURE__*/ nodeImmutable(PropertyNode, "vec3", "AnisotropyT"); // 导出各向异性T向量属性
 
 /**
- * TSL object that represents the shader variable `AnisotropyB`.
+ * 表示着色器变量 `AnisotropyB` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<vec3>}
  */
-export const anisotropyB = /*@__PURE__*/ nodeImmutable( PropertyNode, 'vec3', 'AnisotropyB' );
+export const anisotropyB = /*@__PURE__*/ nodeImmutable(PropertyNode, "vec3", "AnisotropyB"); // 导出各向异性B向量属性
 
 /**
- * TSL object that represents the shader variable `SpecularColor`.
+ * 表示着色器变量 `SpecularColor` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<color>}
  */
-export const specularColor = /*@__PURE__*/ nodeImmutable( PropertyNode, 'color', 'SpecularColor' );
+export const specularColor = /*@__PURE__*/ nodeImmutable(PropertyNode, "color", "SpecularColor"); // 导出镜面反射颜色属性
 
 /**
- * TSL object that represents the shader variable `SpecularF90`.
+ * 表示着色器变量 `SpecularF90` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<float>}
  */
-export const specularF90 = /*@__PURE__*/ nodeImmutable( PropertyNode, 'float', 'SpecularF90' );
+export const specularF90 = /*@__PURE__*/ nodeImmutable(PropertyNode, "float", "SpecularF90"); // 导出镜面反射F90属性
 
 /**
- * TSL object that represents the shader variable `Shininess`.
+ * 表示着色器变量 `Shininess` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<float>}
  */
-export const shininess = /*@__PURE__*/ nodeImmutable( PropertyNode, 'float', 'Shininess' );
+export const shininess = /*@__PURE__*/ nodeImmutable(PropertyNode, "float", "Shininess"); // 导出光泽度属性
 
 /**
- * TSL object that represents the shader variable `Output`.
+ * 表示着色器变量 `Output` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<vec4>}
  */
-export const output = /*@__PURE__*/ nodeImmutable( PropertyNode, 'vec4', 'Output' );
+export const output = /*@__PURE__*/ nodeImmutable(PropertyNode, "vec4", "Output"); // 导出输出属性
 
 /**
- * TSL object that represents the shader variable `dashSize`.
+ * 表示着色器变量 `dashSize` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<float>}
  */
-export const dashSize = /*@__PURE__*/ nodeImmutable( PropertyNode, 'float', 'dashSize' );
+export const dashSize = /*@__PURE__*/ nodeImmutable(PropertyNode, "float", "dashSize"); // 导出虚线大小属性
 
 /**
- * TSL object that represents the shader variable `gapSize`.
+ * 表示着色器变量 `gapSize` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<float>}
  */
-export const gapSize = /*@__PURE__*/ nodeImmutable( PropertyNode, 'float', 'gapSize' );
+export const gapSize = /*@__PURE__*/ nodeImmutable(PropertyNode, "float", "gapSize"); // 导出间隙大小属性
 
 /**
- * TSL object that represents the shader variable `pointWidth`.
+ * 表示着色器变量 `pointWidth` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<float>}
  */
-export const pointWidth = /*@__PURE__*/ nodeImmutable( PropertyNode, 'float', 'pointWidth' );
+export const pointWidth = /*@__PURE__*/ nodeImmutable(PropertyNode, "float", "pointWidth"); // 导出点宽度属性
 
 /**
- * TSL object that represents the shader variable `IOR`.
+ * 表示着色器变量 `IOR` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<float>}
  */
-export const ior = /*@__PURE__*/ nodeImmutable( PropertyNode, 'float', 'IOR' );
+export const ior = /*@__PURE__*/ nodeImmutable(PropertyNode, "float", "IOR"); // 导出折射率属性
 
 /**
- * TSL object that represents the shader variable `Transmission`.
+ * 表示着色器变量 `Transmission` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<float>}
  */
-export const transmission = /*@__PURE__*/ nodeImmutable( PropertyNode, 'float', 'Transmission' );
+export const transmission = /*@__PURE__*/ nodeImmutable(PropertyNode, "float", "Transmission"); // 导出透射属性
 
 /**
- * TSL object that represents the shader variable `Thickness`.
+ * 表示着色器变量 `Thickness` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<float>}
  */
-export const thickness = /*@__PURE__*/ nodeImmutable( PropertyNode, 'float', 'Thickness' );
+export const thickness = /*@__PURE__*/ nodeImmutable(PropertyNode, "float", "Thickness"); // 导出厚度属性
 
 /**
- * TSL object that represents the shader variable `AttenuationDistance`.
+ * 表示着色器变量 `AttenuationDistance` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<float>}
  */
-export const attenuationDistance = /*@__PURE__*/ nodeImmutable( PropertyNode, 'float', 'AttenuationDistance' );
+export const attenuationDistance = /*@__PURE__*/ nodeImmutable(PropertyNode, "float", "AttenuationDistance"); // 导出衰减距离属性
 
 /**
- * TSL object that represents the shader variable `AttenuationColor`.
+ * 表示着色器变量 `AttenuationColor` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<color>}
  */
-export const attenuationColor = /*@__PURE__*/ nodeImmutable( PropertyNode, 'color', 'AttenuationColor' );
+export const attenuationColor = /*@__PURE__*/ nodeImmutable(PropertyNode, "color", "AttenuationColor"); // 导出衰减颜色属性
 
 /**
- * TSL object that represents the shader variable `Dispersion`.
+ * 表示着色器变量 `Dispersion` 的TSL对象。
  *
  * @tsl
  * @type {PropertyNode<float>}
  */
-export const dispersion = /*@__PURE__*/ nodeImmutable( PropertyNode, 'float', 'Dispersion' );
+export const dispersion = /*@__PURE__*/ nodeImmutable(PropertyNode, "float", "Dispersion"); // 导出色散属性
