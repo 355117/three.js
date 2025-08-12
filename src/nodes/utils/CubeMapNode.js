@@ -1,237 +1,284 @@
-import TempNode from '../core/TempNode.js';
-import { NodeUpdateType } from '../core/constants.js';
-import { nodeProxy } from '../tsl/TSLBase.js';
-import { CubeTexture } from '../../textures/CubeTexture.js';
-import { cubeTexture } from '../accessors/CubeTextureNode.js';
-import CubeRenderTarget from '../../renderers/common/CubeRenderTarget.js';
-import { CubeReflectionMapping, CubeRefractionMapping, EquirectangularReflectionMapping, EquirectangularRefractionMapping } from '../../constants.js';
+// 导入临时节点基类
+import TempNode from "../core/TempNode.js";
+// 导入节点更新类型常量
+import { NodeUpdateType } from "../core/constants.js";
+// 导入TSL基础的节点代理功能
+import { nodeProxy } from "../tsl/TSLBase.js";
+// 导入立方体纹理类
+import { CubeTexture } from "../../textures/CubeTexture.js";
+// 导入立方体纹理节点访问器
+import { cubeTexture } from "../accessors/CubeTextureNode.js";
+// 导入立方体渲染目标
+import CubeRenderTarget from "../../renderers/common/CubeRenderTarget.js";
+// 导入纹理映射常量
+import { CubeReflectionMapping, CubeRefractionMapping, EquirectangularReflectionMapping, EquirectangularRefractionMapping } from "../../constants.js";
 
+// 用于缓存已转换的立方体贴图的WeakMap，避免重复转换
 const _cache = new WeakMap();
 
 /**
- * This node can be used to automatically convert environment maps in the
- * equirectangular format into the cube map format.
+ * 立方体贴图节点类。
+ *
+ * 该节点可以自动将等距柱状投影格式的环境贴图
+ * 转换为立方体贴图格式。这在渲染环境反射和折射时非常有用，
+ * 因为立方体贴图在GPU上的采样效率更高。
+ *
+ * 转换过程是异步的，会在渲染时动态进行，
+ * 并使用缓存机制避免重复转换同一张纹理。
  *
  * @augments TempNode
  */
 class CubeMapNode extends TempNode {
+  /**
+   * 获取节点类型标识符。
+   *
+   * @static
+   * @return {string} 返回'CubeMapNode'类型标识符。
+   */
+  static get type() {
+    return "CubeMapNode";
+  }
 
-	static get type() {
+  /**
+   * 构造一个新的立方体贴图节点。
+   *
+   * @param {Node} envNode - 表示环境贴图的节点。
+   */
+  constructor(envNode) {
+    // 立方体贴图节点输出vec3类型（用于采样方向）
+    super("vec3");
 
-		return 'CubeMapNode';
+    /**
+     * 表示环境贴图的节点。
+     *
+     * 该节点可以是纹理节点或材质引用节点，
+     * 包含需要转换的等距柱状投影环境贴图。
+     *
+     * @type {Node}
+     */
+    this.envNode = envNode;
 
-	}
+    /**
+     * 内部立方体纹理的引用。
+     *
+     * 存储转换后的立方体贴图纹理，
+     * 在转换完成前为null。
+     *
+     * @private
+     * @type {?CubeTexture}
+     * @default null
+     */
+    this._cubeTexture = null;
 
-	/**
-	 * Constructs a new cube map node.
-	 *
-	 * @param {Node} envNode - The node representing the environment map.
-	 */
-	constructor( envNode ) {
+    /**
+     * 内部立方体纹理节点的引用。
+     *
+     * 用于包装立方体纹理并提供节点接口，
+     * 初始时包装null值。
+     *
+     * @private
+     * @type {Node}
+     */
+    this._cubeTextureNode = cubeTexture(null);
 
-		super( 'vec3' );
+    // 创建默认的立方体纹理作为占位符
+    const defaultTexture = new CubeTexture();
+    defaultTexture.isRenderTargetTexture = true;
 
-		/**
-		 * The node representing the environment map.
-		 *
-		 * @type {Node}
-		 */
-		this.envNode = envNode;
+    /**
+     * 默认立方体纹理，用作占位符。
+     *
+     * 当从等距柱状投影到立方体贴图的转换
+     * 尚未完成时使用该纹理。这确保了渲染的连续性。
+     *
+     * @private
+     * @type {CubeTexture}
+     */
+    this._defaultTexture = defaultTexture;
 
-		/**
-		 * A reference to the internal cube texture.
-		 *
-		 * @private
-		 * @type {?CubeTexture}
-		 * @default null
-		 */
-		this._cubeTexture = null;
+    /**
+     * 更新类型设置为渲染前更新。
+     *
+     * 由于节点在其 {@link CubeMapNode#updateBefore} 方法中
+     * 每次渲染时更新纹理，所以设置为 `NodeUpdateType.RENDER`。
+     *
+     * @type {string}
+     * @default 'render'
+     */
+    this.updateBeforeType = NodeUpdateType.RENDER;
+  }
 
-		/**
-		 * A reference to the internal cube texture node.
-		 *
-		 * @private
-		 * @type {CubeTextureNode}
-		 */
-		this._cubeTextureNode = cubeTexture( null );
+  /**
+   * 在渲染前更新立方体贴图。
+   *
+   * 该方法在每次渲染前被调用，负责检查环境贴图的状态
+   * 并在需要时进行等距柱状投影到立方体贴图的转换。
+   * 转换过程包括：
+   * 1. 检查缓存中是否已有转换结果
+   * 2. 如果没有，创建新的立方体渲染目标进行转换
+   * 3. 更新内部的立方体纹理节点
+   *
+   * @param {Object} frame - 渲染帧对象，包含渲染器和材质信息。
+   */
+  updateBefore(frame) {
+    const { renderer, material } = frame;
 
-		const defaultTexture = new CubeTexture();
-		defaultTexture.isRenderTargetTexture = true;
+    const envNode = this.envNode;
 
-		/**
-		 * A default cube texture that acts as a placeholder.
-		 * It is used when the conversion from equirectangular to cube
-		 * map has not finished yet for a given texture.
-		 *
-		 * @private
-		 * @type {CubeTexture}
-		 */
-		this._defaultTexture = defaultTexture;
+    // 检查环境节点是否为纹理节点或材质引用节点
+    if (envNode.isTextureNode || envNode.isMaterialReferenceNode) {
+      // 获取实际的纹理对象
+      const texture = envNode.isTextureNode ? envNode.value : material[envNode.property];
 
-		/**
-		 * The `updateBeforeType` is set to `NodeUpdateType.RENDER` since the node updates
-		 * the texture once per render in its {@link CubeMapNode#updateBefore} method.
-		 *
-		 * @type {string}
-		 * @default 'render'
-		 */
-		this.updateBeforeType = NodeUpdateType.RENDER;
+      if (texture && texture.isTexture) {
+        const mapping = texture.mapping;
 
-	}
+        // 检查是否为等距柱状投影映射
+        if (mapping === EquirectangularReflectionMapping || mapping === EquirectangularRefractionMapping) {
+          // 检查缓存中是否已有转换后的立方体贴图
 
-	updateBefore( frame ) {
+          if (_cache.has(texture)) {
+            // 从缓存中获取已转换的立方体贴图
+            const cubeMap = _cache.get(texture);
 
-		const { renderer, material } = frame;
+            // 设置正确的纹理映射类型
+            mapTextureMapping(cubeMap, texture.mapping);
+            this._cubeTexture = cubeMap;
+          } else {
+            // 从等距柱状投影贴图创建立方体贴图
 
-		const envNode = this.envNode;
+            const image = texture.image;
 
-		if ( envNode.isTextureNode || envNode.isMaterialReferenceNode ) {
+            // 检查等距柱状投影图像是否已准备就绪
+            if (isEquirectangularMapReady(image)) {
+              // 创建立方体渲染目标进行转换
+              const renderTarget = new CubeRenderTarget(image.height);
+              renderTarget.fromEquirectangularTexture(renderer, texture);
 
-			const texture = ( envNode.isTextureNode ) ? envNode.value : material[ envNode.property ];
+              // 设置正确的纹理映射类型
+              mapTextureMapping(renderTarget.texture, texture.mapping);
+              this._cubeTexture = renderTarget.texture;
 
-			if ( texture && texture.isTexture ) {
+              // 将转换结果缓存起来
+              _cache.set(texture, renderTarget.texture);
 
-				const mapping = texture.mapping;
+              // 监听纹理销毁事件，以便清理缓存
+              texture.addEventListener("dispose", onTextureDispose);
+            } else {
+              // 等距柱状投影纹理尚未加载时使用默认立方体纹理作为后备
+              this._cubeTexture = this._defaultTexture;
+            }
+          }
 
-				if ( mapping === EquirectangularReflectionMapping || mapping === EquirectangularRefractionMapping ) {
+          // 更新立方体纹理节点的值
+          this._cubeTextureNode.value = this._cubeTexture;
+        } else {
+          // 环境节点已经引用了立方体贴图，直接使用
+          this._cubeTextureNode = this.envNode;
+        }
+      }
+    }
+  }
 
-					// check for converted cubemap map
+  /**
+   * 设置节点。
+   *
+   * 在设置阶段更新立方体贴图并返回内部的立方体纹理节点。
+   * 这确保了在着色器构建时使用的是正确的立方体纹理。
+   *
+   * @param {NodeBuilder} builder - 当前的节点构建器。
+   * @return {Node} 内部的立方体纹理节点。
+   */
+  setup(builder) {
+    // 在设置阶段更新立方体贴图
+    this.updateBefore(builder);
 
-					if ( _cache.has( texture ) ) {
-
-						const cubeMap = _cache.get( texture );
-
-						mapTextureMapping( cubeMap, texture.mapping );
-						this._cubeTexture = cubeMap;
-
-					} else {
-
-						// create cube map from equirectangular map
-
-						const image = texture.image;
-
-						if ( isEquirectangularMapReady( image ) ) {
-
-							const renderTarget = new CubeRenderTarget( image.height );
-							renderTarget.fromEquirectangularTexture( renderer, texture );
-
-							mapTextureMapping( renderTarget.texture, texture.mapping );
-							this._cubeTexture = renderTarget.texture;
-
-							_cache.set( texture, renderTarget.texture );
-
-							texture.addEventListener( 'dispose', onTextureDispose );
-
-						} else {
-
-							// default cube texture as fallback when equirectangular texture is not yet loaded
-
-							this._cubeTexture = this._defaultTexture;
-
-						}
-
-					}
-
-					//
-
-					this._cubeTextureNode.value = this._cubeTexture;
-
-				} else {
-
-					// envNode already refers to a cube map
-
-					this._cubeTextureNode = this.envNode;
-
-				}
-
-			}
-
-		}
-
-	}
-
-	setup( builder ) {
-
-		this.updateBefore( builder );
-
-		return this._cubeTextureNode;
-
-	}
-
+    // 返回内部的立方体纹理节点供着色器使用
+    return this._cubeTextureNode;
+  }
 }
 
+// 导出CubeMapNode类作为默认导出
 export default CubeMapNode;
 
 /**
- * Returns true if the given equirectangular image has been fully loaded
- * and is ready for further processing.
+ * 检查给定的等距柱状投影图像是否已完全加载并准备好进行进一步处理。
+ *
+ * 该函数通过检查图像的高度来判断图像是否已加载完成。
+ * 只有当图像完全加载后，才能进行等距柱状投影到立方体贴图的转换。
  *
  * @private
- * @param {Image} image - The equirectangular image to check.
- * @return {boolean} Whether the image is ready or not.
+ * @param {Image} image - 要检查的等距柱状投影图像。
+ * @return {boolean} 图像是否准备就绪。
  */
-function isEquirectangularMapReady( image ) {
+function isEquirectangularMapReady(image) {
+  // 检查图像是否存在
+  if (image === null || image === undefined) return false;
 
-	if ( image === null || image === undefined ) return false;
-
-	return image.height > 0;
-
+  // 通过检查高度来判断图像是否已加载
+  return image.height > 0;
 }
 
 /**
- * This function is executed when `dispose()` is called on the equirectangular
- * texture. In this case, the generated cube map with its render target
- * is deleted as well.
+ * 纹理销毁事件处理函数。
+ *
+ * 当等距柱状投影纹理调用 `dispose()` 方法时执行该函数。
+ * 在这种情况下，生成的立方体贴图及其渲染目标也会被删除，
+ * 以避免内存泄漏。
  *
  * @private
- * @param {Object} event - The event object.
+ * @param {Object} event - 事件对象。
  */
-function onTextureDispose( event ) {
+function onTextureDispose(event) {
+  const texture = event.target;
 
-	const texture = event.target;
+  // 移除事件监听器，避免重复调用
+  texture.removeEventListener("dispose", onTextureDispose);
 
-	texture.removeEventListener( 'dispose', onTextureDispose );
+  // 从缓存中获取对应的渲染目标
+  const renderTarget = _cache.get(texture);
 
-	const renderTarget = _cache.get( texture );
+  if (renderTarget !== undefined) {
+    // 从缓存中删除该纹理的记录
+    _cache.delete(texture);
 
-	if ( renderTarget !== undefined ) {
-
-		_cache.delete( texture );
-
-		renderTarget.dispose();
-
-	}
-
+    // 销毁渲染目标，释放GPU资源
+    renderTarget.dispose();
+  }
 }
 
 /**
- * This function makes sure the generated cube map uses the correct
- * texture mapping that corresponds to the equirectangular original.
+ * 纹理映射类型转换函数。
+ *
+ * 该函数确保生成的立方体贴图使用与等距柱状投影原始纹理
+ * 相对应的正确纹理映射类型。这对于保持反射和折射效果的
+ * 正确性至关重要。
  *
  * @private
- * @param {Texture} texture - The cube texture.
- * @param {number} mapping - The original texture mapping.
+ * @param {Texture} texture - 立方体纹理。
+ * @param {number} mapping - 原始纹理的映射类型。
  */
-function mapTextureMapping( texture, mapping ) {
-
-	if ( mapping === EquirectangularReflectionMapping ) {
-
-		texture.mapping = CubeReflectionMapping;
-
-	} else if ( mapping === EquirectangularRefractionMapping ) {
-
-		texture.mapping = CubeRefractionMapping;
-
-	}
-
+function mapTextureMapping(texture, mapping) {
+  // 将等距柱状投影反射映射转换为立方体反射映射
+  if (mapping === EquirectangularReflectionMapping) {
+    texture.mapping = CubeReflectionMapping;
+  }
+  // 将等距柱状投影折射映射转换为立方体折射映射
+  else if (mapping === EquirectangularRefractionMapping) {
+    texture.mapping = CubeRefractionMapping;
+  }
 }
 
 /**
- * TSL function for creating a cube map node.
+ * TSL函数，用于创建立方体贴图节点。
+ *
+ * 该函数提供了一个便捷的方式来创建CubeMapNode实例，
+ * 用于自动将等距柱状投影环境贴图转换为立方体贴图格式。
+ * 这在需要高效环境映射的场景中非常有用。
  *
  * @tsl
  * @function
- * @param {Node} envNode - The node representing the environment map.
- * @returns {CubeMapNode}
+ * @param {Node} envNode - 表示环境贴图的节点。
+ * @returns {CubeMapNode} 立方体贴图节点实例。
  */
-export const cubeMapNode = /*@__PURE__*/ nodeProxy( CubeMapNode ).setParameterLength( 1 );
+export const cubeMapNode = /*@__PURE__*/ nodeProxy(CubeMapNode).setParameterLength(1);

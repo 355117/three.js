@@ -1,41 +1,82 @@
-import { time } from './Timer.js';
+// 导入时间节点，用作默认的振荡器输入
+import { time } from "./Timer.js";
 
 /**
- * Generates a sine wave oscillation based on a timer.
+ * 基于计时器生成正弦波振荡。
+ *
+ * 正弦波是最基本的周期性波形，具有平滑的曲线特征。
+ * 该函数生成一个在[0, 1]范围内振荡的正弦波，常用于
+ * 创建平滑的动画效果、呼吸灯效果或其他需要自然过渡的场景。
+ *
+ * 数学公式：sin(2π * (t + 0.75)) * 0.5 + 0.5
+ * - 加0.75是为了相位偏移，使波形从1开始而不是0.5
+ * - 乘以2π将输入转换为弧度
+ * - 乘以0.5并加0.5将输出从[-1,1]映射到[0,1]
  *
  * @tsl
  * @function
- * @param {Node<float>} t - The timer to generate the oscillation with.
- * @return {Node<float>} The oscillation node.
+ * @param {Node<float>} t - 用于生成振荡的计时器节点，默认为全局时间。
+ * @return {Node<float>} 正弦波振荡节点，输出范围[0, 1]。
  */
-export const oscSine = ( t = time ) => t.add( 0.75 ).mul( Math.PI * 2 ).sin().mul( 0.5 ).add( 0.5 );
+export const oscSine = (t = time) =>
+  t
+    .add(0.75)
+    .mul(Math.PI * 2)
+    .sin()
+    .mul(0.5)
+    .add(0.5);
 
 /**
- * Generates a square wave oscillation based on a timer.
+ * 基于计时器生成方波振荡。
+ *
+ * 方波是一种只有两个状态（0和1）的数字波形，具有急剧的
+ * 上升和下降边沿。常用于创建开关效果、闪烁动画或
+ * 需要明确状态切换的场景。
+ *
+ * 数学公式：round(fract(t))
+ * - fract(t)获取时间的小数部分，产生0到1的锯齿波
+ * - round()将其四舍五入为0或1，形成方波
  *
  * @tsl
  * @function
- * @param {Node<float>} t - The timer to generate the oscillation with.
- * @return {Node<float>} The oscillation node.
+ * @param {Node<float>} t - 用于生成振荡的计时器节点，默认为全局时间。
+ * @return {Node<float>} 方波振荡节点，输出值为0或1。
  */
-export const oscSquare = ( t = time ) => t.fract().round();
+export const oscSquare = (t = time) => t.fract().round();
 
 /**
- * Generates a triangle wave oscillation based on a timer.
+ * 基于计时器生成三角波振荡。
+ *
+ * 三角波具有线性上升和下降的特征，比正弦波更尖锐，
+ * 但比方波更平滑。常用于创建锯齿状的动画效果或
+ * 需要线性变化的场景。
+ *
+ * 数学公式：abs(2 * fract(t + 0.5) - 1)
+ * - 加0.5进行相位偏移
+ * - fract()获取小数部分
+ * - 乘以2并减1将范围从[0,1]映射到[-1,1]
+ * - abs()取绝对值，形成三角波形状
  *
  * @tsl
  * @function
- * @param {Node<float>} t - The timer to generate the oscillation with.
- * @return {Node<float>} The oscillation node.
+ * @param {Node<float>} t - 用于生成振荡的计时器节点，默认为全局时间。
+ * @return {Node<float>} 三角波振荡节点，输出范围[0, 1]。
  */
-export const oscTriangle = ( t = time ) => t.add( 0.5 ).fract().mul( 2 ).sub( 1 ).abs();
+export const oscTriangle = (t = time) => t.add(0.5).fract().mul(2).sub(1).abs();
 
 /**
- * Generates a sawtooth wave oscillation based on a timer.
+ * 基于计时器生成锯齿波振荡。
+ *
+ * 锯齿波具有线性上升和瞬间下降的特征，形状类似锯齿。
+ * 常用于创建扫描效果、渐变动画或需要重复线性增长的场景。
+ *
+ * 数学公式：fract(t)
+ * - fract()函数直接获取时间的小数部分
+ * - 产生从0线性增长到1，然后瞬间跳回0的锯齿波形
  *
  * @tsl
  * @function
- * @param {Node<float>} t - The timer to generate the oscillation with.
- * @return {Node<float>} The oscillation node.
+ * @param {Node<float>} t - 用于生成振荡的计时器节点，默认为全局时间。
+ * @return {Node<float>} 锯齿波振荡节点，输出范围[0, 1)。
  */
-export const oscSawtooth = ( t = time ) => t.fract();
+export const oscSawtooth = (t = time) => t.fract();
