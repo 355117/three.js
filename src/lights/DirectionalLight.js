@@ -1,28 +1,27 @@
-import { Light } from './Light.js';
-import { DirectionalLightShadow } from './DirectionalLightShadow.js';
-import { Object3D } from '../core/Object3D.js';
+// 导入光源基类
+import { Light } from "./Light.js";
+// 导入平行光阴影类
+import { DirectionalLightShadow } from "./DirectionalLightShadow.js";
+// 导入3D对象基类
+import { Object3D } from "../core/Object3D.js";
 
 /**
- * A light that gets emitted in a specific direction. This light will behave
- * as though it is infinitely far away and the rays produced from it are all
- * parallel. The common use case for this is to simulate daylight; the sun is
- * far enough away that its position can be considered to be infinite, and
- * all light rays coming from it are parallel.
+ * 平行光源类
+ * 发射特定方向光线的光源，表现为无限远的光源，所有光线都是平行的
+ * 常用于模拟日光；太阳距离足够远，可以认为其位置是无限的，
+ * 从太阳发出的所有光线都是平行的
  *
- * A common point of confusion for directional lights is that setting the
- * rotation has no effect. This is because three.js's DirectionalLight is the
- * equivalent to what is often called a 'Target Direct Light' in other
- * applications.
+ * 平行光的一个常见困惑点是设置旋转没有效果。这是因为three.js的平行光
+ * 相当于其他应用程序中常说的"目标定向光"。
  *
- * This means that its direction is calculated as pointing from the light's
- * {@link Object3D#position} to the {@link DirectionalLight#target} position
- * (as opposed to a 'Free Direct Light' that just has a rotation
- * component).
+ * 这意味着它的方向是从光源的{@link Object3D#position}指向
+ * {@link DirectionalLight#target}位置来计算的
+ * （而不是只有旋转组件的"自由定向光"）。
  *
- * This light can cast shadows - see the {@link DirectionalLightShadow} for details.
+ * 这种光源可以投射阴影 - 详见{@link DirectionalLightShadow}。
  *
  * ```js
- * // White directional light at half intensity shining from the top.
+ * // 从顶部照射的半强度白色平行光
  * const directionalLight = new THREE.DirectionalLight( 0xffffff, 0.5 );
  * scene.add( directionalLight );
  * ```
@@ -30,71 +29,84 @@ import { Object3D } from '../core/Object3D.js';
  * @augments Light
  */
 class DirectionalLight extends Light {
+  /**
+   * 构造一个新的平行光源
+   *
+   * @param {(number|Color|string)} [color=0xffffff] - 光源的颜色
+   * @param {number} [intensity=1] - 光源的强度/亮度
+   */
+  constructor(color, intensity) {
+    // 调用父类构造函数，传入颜色和强度参数
+    super(color, intensity);
 
-	/**
-	 * Constructs a new directional light.
-	 *
-	 * @param {(number|Color|string)} [color=0xffffff] - The light's color.
-	 * @param {number} [intensity=1] - The light's strength/intensity.
-	 */
-	constructor( color, intensity ) {
+    /**
+     * 用于类型检测的标志位
+     * 可以通过此属性判断对象是否为平行光源
+     *
+     * @type {boolean}
+     * @readonly
+     * @default true
+     */
+    this.isDirectionalLight = true;
 
-		super( color, intensity );
+    // 设置光源类型标识
+    this.type = "DirectionalLight";
 
-		/**
-		 * This flag can be used for type testing.
-		 *
-		 * @type {boolean}
-		 * @readonly
-		 * @default true
-		 */
-		this.isDirectionalLight = true;
+    // 将光源位置设置为默认向上方向（0, 1, 0）
+    this.position.copy(Object3D.DEFAULT_UP);
+    // 更新变换矩阵
+    this.updateMatrix();
 
-		this.type = 'DirectionalLight';
+    /**
+     * 平行光从其位置指向目标位置
+     *
+     * 要将目标位置更改为默认值以外的任何值，
+     * 必须将其添加到场景中。
+     *
+     * 也可以将目标设置为场景中的另一个3D对象。
+     * 光源现在将跟踪目标对象。
+     *
+     * @type {Object3D}
+     */
+    this.target = new Object3D();
 
-		this.position.copy( Object3D.DEFAULT_UP );
-		this.updateMatrix();
+    /**
+     * 此属性保存光源的阴影配置
+     * 包含阴影相机、阴影贴图等设置
+     *
+     * @type {DirectionalLightShadow}
+     */
+    this.shadow = new DirectionalLightShadow();
+  }
 
-		/**
-		 * The directional light points from its position to the
-		 * target's position.
-		 *
-		 * For the target's position to be changed to anything other
-		 * than the default, it must be added to the scene.
-		 *
-		 * It is also possible to set the target to be another 3D object
-		 * in the scene. The light will now track the target object.
-		 *
-		 * @type {Object3D}
-		 */
-		this.target = new Object3D();
+  /**
+   * 释放光源占用的资源
+   * 主要是释放阴影相关的资源
+   */
+  dispose() {
+    // 释放阴影资源
+    this.shadow.dispose();
+  }
 
-		/**
-		 * This property holds the light's shadow configuration.
-		 *
-		 * @type {DirectionalLightShadow}
-		 */
-		this.shadow = new DirectionalLightShadow();
+  /**
+   * 复制另一个平行光源的属性到当前对象
+   *
+   * @param {DirectionalLight} source - 要复制的源对象
+   * @returns {DirectionalLight} 返回当前对象以支持链式调用
+   */
+  copy(source) {
+    // 调用父类的复制方法
+    super.copy(source);
 
-	}
+    // 克隆目标对象
+    this.target = source.target.clone();
+    // 克隆阴影配置
+    this.shadow = source.shadow.clone();
 
-	dispose() {
-
-		this.shadow.dispose();
-
-	}
-
-	copy( source ) {
-
-		super.copy( source );
-
-		this.target = source.target.clone();
-		this.shadow = source.shadow.clone();
-
-		return this;
-
-	}
-
+    // 返回当前对象以支持链式调用
+    return this;
+  }
 }
 
+// 导出平行光源类
 export { DirectionalLight };

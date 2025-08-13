@@ -1,12 +1,14 @@
-import { Light } from './Light.js';
-import { PointLightShadow } from './PointLightShadow.js';
+// 导入光源基类
+import { Light } from "./Light.js";
+// 导入点光源阴影类
+import { PointLightShadow } from "./PointLightShadow.js";
 
 /**
- * A light that gets emitted from a single point in all directions. A common
- * use case for this is to replicate the light emitted from a bare
- * lightbulb.
+ * 点光源类
+ * 从单个点向所有方向发射光线的光源
+ * 常见的用例是复制裸露灯泡发出的光线
  *
- * This light can cast shadows - see the {@link PointLightShadow} for details.
+ * 这种光源可以投射阴影 - 详见{@link PointLightShadow}
  *
  * ```js
  * const light = new THREE.PointLight( 0xff0000, 1, 100 );
@@ -17,100 +19,110 @@ import { PointLightShadow } from './PointLightShadow.js';
  * @augments Light
  */
 class PointLight extends Light {
+  /**
+   * 构造一个新的点光源
+   *
+   * @param {(number|Color|string)} [color=0xffffff] - 光源的颜色
+   * @param {number} [intensity=1] - 光源的强度/亮度，以坎德拉(cd)为单位测量
+   * @param {number} [distance=0] - 光源的最大照射距离，0表示无限制
+   * @param {number} [decay=2] - 光源沿距离衰减的程度
+   */
+  constructor(color, intensity, distance = 0, decay = 2) {
+    // 调用父类构造函数，传入颜色和强度参数
+    super(color, intensity);
 
-	/**
-	 * Constructs a new point light.
-	 *
-	 * @param {(number|Color|string)} [color=0xffffff] - The light's color.
-	 * @param {number} [intensity=1] - The light's strength/intensity measured in candela (cd).
-	 * @param {number} [distance=0] - Maximum range of the light. `0` means no limit.
-	 * @param {number} [decay=2] - The amount the light dims along the distance of the light.
-	 */
-	constructor( color, intensity, distance = 0, decay = 2 ) {
+    /**
+     * 用于类型检测的标志位
+     * 可以通过此属性判断对象是否为点光源
+     *
+     * @type {boolean}
+     * @readonly
+     * @default true
+     */
+    this.isPointLight = true;
 
-		super( color, intensity );
+    // 设置光源类型标识
+    this.type = "PointLight";
 
-		/**
-		 * This flag can be used for type testing.
-		 *
-		 * @type {boolean}
-		 * @readonly
-		 * @default true
-		 */
-		this.isPointLight = true;
+    /**
+     * 光源的最大照射距离
+     * 当距离为零时，光线将根据平方反比定律衰减到无限距离
+     * 当距离非零时，光线将根据平方反比定律衰减，直到接近距离截止点，
+     * 然后快速平滑地衰减到0。本质上，截止点在物理上是不正确的
+     *
+     * @type {number}
+     * @default 0
+     */
+    this.distance = distance;
 
-		this.type = 'PointLight';
+    /**
+     * 光源沿距离衰减的程度
+     * 在物理正确渲染的上下文中，不应更改默认值
+     *
+     * @type {number}
+     * @default 2
+     */
+    this.decay = decay;
 
-		/**
-		 * When distance is zero, light will attenuate according to inverse-square
-		 * law to infinite distance. When distance is non-zero, light will attenuate
-		 * according to inverse-square law until near the distance cutoff, where it
-		 * will then attenuate quickly and smoothly to 0. Inherently, cutoffs are not
-		 * physically correct.
-		 *
-		 * @type {number}
-		 * @default 0
-		 */
-		this.distance = distance;
+    /**
+     * 此属性保存光源的阴影配置
+     * 包含阴影相机、阴影贴图等设置
+     *
+     * @type {PointLightShadow}
+     */
+    this.shadow = new PointLightShadow();
+  }
 
-		/**
-		 * The amount the light dims along the distance of the light. In context of
-		 * physically-correct rendering the default value should not be changed.
-		 *
-		 * @type {number}
-		 * @default 2
-		 */
-		this.decay = decay;
+  /**
+   * 光源的功率
+   * 功率是以流明(lm)为单位测量的光源光通量
+   * 改变功率也会改变光源的强度
+   *
+   * @type {number}
+   */
+  get power() {
+    // 从强度(以坎德拉为单位)计算光源的光通量(以流明为单位)
+    // 对于各向同性光源，光通量(lm) = 4π × 光强度(cd)
+    return this.intensity * 4 * Math.PI;
+  }
 
-		/**
-		 * This property holds the light's shadow configuration.
-		 *
-		 * @type {PointLightShadow}
-		 */
-		this.shadow = new PointLightShadow();
+  set power(power) {
+    // 从所需的光通量(以流明为单位)设置光源的强度(以坎德拉为单位)
+    this.intensity = power / (4 * Math.PI);
+  }
 
-	}
+  /**
+   * 释放光源占用的资源
+   * 主要是释放阴影相关的资源
+   */
+  dispose() {
+    // 释放阴影资源
+    this.shadow.dispose();
+  }
 
-	/**
-	 * The light's power. Power is the luminous power of the light measured in lumens (lm).
-	 * Changing the power will also change the light's intensity.
-	 *
-	 * @type {number}
-	 */
-	get power() {
+  /**
+   * 复制另一个点光源的属性到当前对象
+   *
+   * @param {PointLight} source - 要复制的源对象
+   * @param {boolean} recursive - 是否递归复制子对象
+   * @returns {PointLight} 返回当前对象以支持链式调用
+   */
+  copy(source, recursive) {
+    // 调用父类的复制方法
+    super.copy(source, recursive);
 
-		// compute the light's luminous power (in lumens) from its intensity (in candela)
-		// for an isotropic light source, luminous power (lm) = 4 π luminous intensity (cd)
-		return this.intensity * 4 * Math.PI;
+    // 复制距离属性
+    this.distance = source.distance;
+    // 复制衰减属性
+    this.decay = source.decay;
 
-	}
+    // 克隆阴影配置
+    this.shadow = source.shadow.clone();
 
-	set power( power ) {
-
-		// set the light's intensity (in candela) from the desired luminous power (in lumens)
-		this.intensity = power / ( 4 * Math.PI );
-
-	}
-
-	dispose() {
-
-		this.shadow.dispose();
-
-	}
-
-	copy( source, recursive ) {
-
-		super.copy( source, recursive );
-
-		this.distance = source.distance;
-		this.decay = source.decay;
-
-		this.shadow = source.shadow.clone();
-
-		return this;
-
-	}
-
+    // 返回当前对象以支持链式调用
+    return this;
+  }
 }
 
+// 导出点光源类
 export { PointLight };

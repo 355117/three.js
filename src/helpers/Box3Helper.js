@@ -1,7 +1,7 @@
-import { LineSegments } from '../objects/LineSegments.js';
-import { LineBasicMaterial } from '../materials/LineBasicMaterial.js';
-import { BufferAttribute, Float32BufferAttribute } from '../core/BufferAttribute.js';
-import { BufferGeometry } from '../core/BufferGeometry.js';
+import { LineSegments } from "../objects/LineSegments.js";
+import { LineBasicMaterial } from "../materials/LineBasicMaterial.js";
+import { BufferAttribute, Float32BufferAttribute } from "../core/BufferAttribute.js";
+import { BufferGeometry } from "../core/BufferGeometry.js";
 
 /**
  * A helper object to visualize an instance of {@link Box3}.
@@ -17,67 +17,59 @@ import { BufferGeometry } from '../core/BufferGeometry.js';
  * @augments LineSegments
  */
 class Box3Helper extends LineSegments {
+  /**
+   * Constructs a new box3 helper.
+   *
+   * @param {Box3} box - The box to visualize.
+   * @param {number|Color|string} [color=0xffff00] - The box's color.
+   */
+  constructor(box, color = 0xffff00) {
+    const indices = new Uint16Array([0, 1, 1, 2, 2, 3, 3, 0, 4, 5, 5, 6, 6, 7, 7, 4, 0, 4, 1, 5, 2, 6, 3, 7]);
 
-	/**
-	 * Constructs a new box3 helper.
-	 *
-	 * @param {Box3} box - The box to visualize.
-	 * @param {number|Color|string} [color=0xffff00] - The box's color.
-	 */
-	constructor( box, color = 0xffff00 ) {
+    const positions = [1, 1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1, 1, 1, -1, -1, 1, -1, -1, -1, -1, 1, -1, -1];
 
-		const indices = new Uint16Array( [ 0, 1, 1, 2, 2, 3, 3, 0, 4, 5, 5, 6, 6, 7, 7, 4, 0, 4, 1, 5, 2, 6, 3, 7 ] );
+    const geometry = new BufferGeometry();
 
-		const positions = [ 1, 1, 1, - 1, 1, 1, - 1, - 1, 1, 1, - 1, 1, 1, 1, - 1, - 1, 1, - 1, - 1, - 1, - 1, 1, - 1, - 1 ];
+    geometry.setIndex(new BufferAttribute(indices, 1));
 
-		const geometry = new BufferGeometry();
+    geometry.setAttribute("position", new Float32BufferAttribute(positions, 3));
 
-		geometry.setIndex( new BufferAttribute( indices, 1 ) );
+    super(geometry, new LineBasicMaterial({ color: color, toneMapped: false }));
 
-		geometry.setAttribute( 'position', new Float32BufferAttribute( positions, 3 ) );
+    /**
+     * The box being visualized.
+     *
+     * @type {Box3}
+     */
+    this.box = box;
 
-		super( geometry, new LineBasicMaterial( { color: color, toneMapped: false } ) );
+    this.type = "Box3Helper";
 
-		/**
-		 * The box being visualized.
-		 *
-		 * @type {Box3}
-		 */
-		this.box = box;
+    this.geometry.computeBoundingSphere();
+  }
 
-		this.type = 'Box3Helper';
+  updateMatrixWorld(force) {
+    const box = this.box;
 
-		this.geometry.computeBoundingSphere();
+    if (box.isEmpty()) return;
 
-	}
+    box.getCenter(this.position);
 
-	updateMatrixWorld( force ) {
+    box.getSize(this.scale);
 
-		const box = this.box;
+    this.scale.multiplyScalar(0.5);
 
-		if ( box.isEmpty() ) return;
+    super.updateMatrixWorld(force);
+  }
 
-		box.getCenter( this.position );
-
-		box.getSize( this.scale );
-
-		this.scale.multiplyScalar( 0.5 );
-
-		super.updateMatrixWorld( force );
-
-	}
-
-	/**
-	 * Frees the GPU-related resources allocated by this instance. Call this
-	 * method whenever this instance is no longer used in your app.
-	 */
-	dispose() {
-
-		this.geometry.dispose();
-		this.material.dispose();
-
-	}
-
+  /**
+   * Frees the GPU-related resources allocated by this instance. Call this
+   * method whenever this instance is no longer used in your app.
+   */
+  dispose() {
+    this.geometry.dispose();
+    this.material.dispose();
+  }
 }
 
 export { Box3Helper };

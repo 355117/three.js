@@ -1,42 +1,44 @@
-import { Light } from './Light.js';
+// 导入光源基类
+import { Light } from "./Light.js";
 
 /**
- * This light globally illuminates all objects in the scene equally.
+ * 环境光源类
+ * 这种光源会均匀地照亮场景中的所有物体，没有方向性
  *
- * It cannot be used to cast shadows as it does not have a direction.
+ * 环境光不能用来投射阴影，因为它没有方向
  *
  * ```js
- * const light = new THREE.AmbientLight( 0x404040 ); // soft white light
+ * const light = new THREE.AmbientLight( 0x404040 ); // 柔和的白光
  * scene.add( light );
  * ```
  *
  * @augments Light
  */
 class AmbientLight extends Light {
+  /**
+   * 构造一个新的环境光源
+   *
+   * @param {(number|Color|string)} [color=0xffffff] - 光源的颜色
+   * @param {number} [intensity=1] - 光源的强度/亮度
+   */
+  constructor(color, intensity) {
+    // 调用父类构造函数，传入颜色和强度参数
+    super(color, intensity);
 
-	/**
-	 * Constructs a new ambient light.
-	 *
-	 * @param {(number|Color|string)} [color=0xffffff] - The light's color.
-	 * @param {number} [intensity=1] - The light's strength/intensity.
-	 */
-	constructor( color, intensity ) {
+    /**
+     * 用于类型检测的标志位
+     * 可以通过此属性判断对象是否为环境光源
+     *
+     * @type {boolean}
+     * @readonly
+     * @default true
+     */
+    this.isAmbientLight = true;
 
-		super( color, intensity );
-
-		/**
-		 * This flag can be used for type testing.
-		 *
-		 * @type {boolean}
-		 * @readonly
-		 * @default true
-		 */
-		this.isAmbientLight = true;
-
-		this.type = 'AmbientLight';
-
-	}
-
+    // 设置光源类型标识
+    this.type = "AmbientLight";
+  }
 }
 
+// 导出环境光源类
 export { AmbientLight };
