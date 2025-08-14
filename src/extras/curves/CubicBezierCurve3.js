@@ -1,129 +1,166 @@
-import { Curve } from '../core/Curve.js';
-import { CubicBezier } from '../core/Interpolations.js';
-import { Vector3 } from '../../math/Vector3.js';
+// 导入基础曲线类
+import { Curve } from "../core/Curve.js";
+// 导入三次贝塞尔插值函数
+import { CubicBezier } from "../core/Interpolations.js";
+// 导入三维向量类
+import { Vector3 } from "../../math/Vector3.js";
 
 /**
- * A curve representing a 3D Cubic Bezier curve.
+ * 表示3D三次贝塞尔曲线的类
+ * 三维三次贝塞尔曲线由4个3D控制点定义：起点、两个控制点和终点
+ * 与2D版本类似，但在三维空间中工作，包含x、y、z三个坐标分量
  *
  * @augments Curve
  */
 class CubicBezierCurve3 extends Curve {
+  /**
+   * 构造一个新的3D三次贝塞尔曲线
+   *
+   * @param {Vector3} [v0] - 起点的3D坐标
+   * @param {Vector3} [v1] - 第一个控制点的3D坐标
+   * @param {Vector3} [v2] - 第二个控制点的3D坐标
+   * @param {Vector3} [v3] - 终点的3D坐标
+   */
+  constructor(v0 = new Vector3(), v1 = new Vector3(), v2 = new Vector3(), v3 = new Vector3()) {
+    // 调用父类构造函数
+    super();
 
-	/**
-	 * Constructs a new Cubic Bezier curve.
-	 *
-	 * @param {Vector3} [v0] - The start point.
-	 * @param {Vector3} [v1] - The first control point.
-	 * @param {Vector3} [v2] - The second control point.
-	 * @param {Vector3} [v3] - The end point.
-	 */
-	constructor( v0 = new Vector3(), v1 = new Vector3(), v2 = new Vector3(), v3 = new Vector3() ) {
+    /**
+     * 用于类型检测的标志位
+     * 可以通过检查此属性来确定对象是否为CubicBezierCurve3类型
+     *
+     * @type {boolean}
+     * @readonly
+     * @default true
+     */
+    this.isCubicBezierCurve3 = true;
 
-		super();
+    // 设置曲线类型标识符
+    this.type = "CubicBezierCurve3";
 
-		/**
-		 * This flag can be used for type testing.
-		 *
-		 * @type {boolean}
-		 * @readonly
-		 * @default true
-		 */
-		this.isCubicBezierCurve3 = true;
+    /**
+     * 起点的3D坐标
+     * 贝塞尔曲线在三维空间中的起始位置
+     *
+     * @type {Vector3}
+     */
+    this.v0 = v0;
 
-		this.type = 'CubicBezierCurve3';
+    /**
+     * 第一个控制点的3D坐标
+     * 影响曲线从起点出发的方向和弯曲程度
+     *
+     * @type {Vector3}
+     */
+    this.v1 = v1;
 
-		/**
-		 * The start point.
-		 *
-		 * @type {Vector3}
-		 */
-		this.v0 = v0;
+    /**
+     * 第二个控制点的3D坐标
+     * 影响曲线到达终点的方向和弯曲程度
+     *
+     * @type {Vector3}
+     */
+    this.v2 = v2;
 
-		/**
-		 * The first control point.
-		 *
-		 * @type {Vector3}
-		 */
-		this.v1 = v1;
+    /**
+     * 终点的3D坐标
+     * 贝塞尔曲线在三维空间中的结束位置
+     *
+     * @type {Vector3}
+     */
+    this.v3 = v3;
+  }
 
-		/**
-		 * The second control point.
-		 *
-		 * @type {Vector3}
-		 */
-		this.v2 = v2;
+  /**
+   * 返回曲线上指定参数位置的3D点
+   * 使用三次贝塞尔插值算法分别计算x、y、z三个坐标分量
+   *
+   * @param {number} t - 插值因子，表示曲线上的位置，必须在[0,1]范围内
+   * @param {Vector3} [optionalTarget] - 可选的目标向量，结果将写入此向量
+   * @return {Vector3} 曲线上的3D位置点
+   */
+  getPoint(t, optionalTarget = new Vector3()) {
+    // 获取目标向量引用
+    const point = optionalTarget;
 
-		/**
-		 * The end point.
-		 *
-		 * @type {Vector3}
-		 */
-		this.v3 = v3;
+    // 获取所有控制点的引用，提高性能
+    const v0 = this.v0,
+      v1 = this.v1,
+      v2 = this.v2,
+      v3 = this.v3;
 
-	}
+    // 使用三次贝塞尔插值分别计算x、y、z坐标
+    point.set(
+      CubicBezier(t, v0.x, v1.x, v2.x, v3.x), // 计算x坐标
+      CubicBezier(t, v0.y, v1.y, v2.y, v3.y), // 计算y坐标
+      CubicBezier(t, v0.z, v1.z, v2.z, v3.z) // 计算z坐标
+    );
 
-	/**
-	 * Returns a point on the curve.
-	 *
-	 * @param {number} t - A interpolation factor representing a position on the curve. Must be in the range `[0,1]`.
-	 * @param {Vector3} [optionalTarget] - The optional target vector the result is written to.
-	 * @return {Vector3} The position on the curve.
-	 */
-	getPoint( t, optionalTarget = new Vector3() ) {
+    // 返回计算得到的3D点
+    return point;
+  }
 
-		const point = optionalTarget;
+  /**
+   * 复制另一个3D三次贝塞尔曲线的属性到当前对象
+   *
+   * @param {CubicBezierCurve3} source - 要复制的源曲线对象
+   * @return {CubicBezierCurve3} 返回当前对象，支持链式调用
+   */
+  copy(source) {
+    // 调用父类的复制方法
+    super.copy(source);
 
-		const v0 = this.v0, v1 = this.v1, v2 = this.v2, v3 = this.v3;
+    // 复制所有3D控制点
+    this.v0.copy(source.v0); // 复制起点
+    this.v1.copy(source.v1); // 复制第一个控制点
+    this.v2.copy(source.v2); // 复制第二个控制点
+    this.v3.copy(source.v3); // 复制终点
 
-		point.set(
-			CubicBezier( t, v0.x, v1.x, v2.x, v3.x ),
-			CubicBezier( t, v0.y, v1.y, v2.y, v3.y ),
-			CubicBezier( t, v0.z, v1.z, v2.z, v3.z )
-		);
+    // 返回当前对象支持链式调用
+    return this;
+  }
 
-		return point;
+  /**
+   * 将3D曲线数据序列化为JSON格式
+   * 用于保存或传输曲线数据
+   *
+   * @return {Object} 包含曲线数据的JSON对象
+   */
+  toJSON() {
+    // 获取父类的JSON数据
+    const data = super.toJSON();
 
-	}
+    // 将所有3D控制点转换为数组格式
+    data.v0 = this.v0.toArray(); // 起点转为数组[x,y,z]
+    data.v1 = this.v1.toArray(); // 第一个控制点转为数组[x,y,z]
+    data.v2 = this.v2.toArray(); // 第二个控制点转为数组[x,y,z]
+    data.v3 = this.v3.toArray(); // 终点转为数组[x,y,z]
 
-	copy( source ) {
+    // 返回完整的JSON数据
+    return data;
+  }
 
-		super.copy( source );
+  /**
+   * 从JSON数据恢复3D曲线对象
+   * 用于加载或接收曲线数据
+   *
+   * @param {Object} json - 包含曲线数据的JSON对象
+   * @return {CubicBezierCurve3} 返回当前对象，支持链式调用
+   */
+  fromJSON(json) {
+    // 调用父类的JSON恢复方法
+    super.fromJSON(json);
 
-		this.v0.copy( source.v0 );
-		this.v1.copy( source.v1 );
-		this.v2.copy( source.v2 );
-		this.v3.copy( source.v3 );
+    // 从数组数据恢复所有3D控制点
+    this.v0.fromArray(json.v0); // 恢复起点[x,y,z]
+    this.v1.fromArray(json.v1); // 恢复第一个控制点[x,y,z]
+    this.v2.fromArray(json.v2); // 恢复第二个控制点[x,y,z]
+    this.v3.fromArray(json.v3); // 恢复终点[x,y,z]
 
-		return this;
-
-	}
-
-	toJSON() {
-
-		const data = super.toJSON();
-
-		data.v0 = this.v0.toArray();
-		data.v1 = this.v1.toArray();
-		data.v2 = this.v2.toArray();
-		data.v3 = this.v3.toArray();
-
-		return data;
-
-	}
-
-	fromJSON( json ) {
-
-		super.fromJSON( json );
-
-		this.v0.fromArray( json.v0 );
-		this.v1.fromArray( json.v1 );
-		this.v2.fromArray( json.v2 );
-		this.v3.fromArray( json.v3 );
-
-		return this;
-
-	}
-
+    // 返回当前对象支持链式调用
+    return this;
+  }
 }
 
+// 导出CubicBezierCurve3类供其他模块使用
 export { CubicBezierCurve3 };
