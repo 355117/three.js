@@ -1,506 +1,482 @@
-import { Quaternion } from '../math/Quaternion.js';
-import { AdditiveAnimationBlendMode } from '../constants.js';
+// 导入四元数类，用于处理旋转动画
+import { Quaternion } from "../math/Quaternion.js";
+// 导入加法动画混合模式常量
+import { AdditiveAnimationBlendMode } from "../constants.js";
 
 /**
- * Converts an array to a specific type.
+ * 将数组转换为指定类型
  *
- * @param {TypedArray|Array} array - The array to convert.
- * @param {TypedArray.constructor} type - The constructor of a typed array that defines the new type.
- * @return {TypedArray} The converted array.
+ * @param {TypedArray|Array} array - 要转换的数组
+ * @param {TypedArray.constructor} type - 定义新类型的类型化数组构造函数
+ * @return {TypedArray} 转换后的数组
  */
-function convertArray( array, type ) {
+function convertArray(array, type) {
+  // 如果数组不存在或已经是目标类型，直接返回
+  if (!array || array.constructor === type) return array;
 
-	if ( ! array || array.constructor === type ) return array;
+  // 检查是否为类型化数组构造函数
+  if (typeof type.BYTES_PER_ELEMENT === "number") {
+    // 创建类型化数组
+    return new type(array);
+  }
 
-	if ( typeof type.BYTES_PER_ELEMENT === 'number' ) {
-
-		return new type( array ); // create typed array
-
-	}
-
-	return Array.prototype.slice.call( array ); // create Array
-
+  // 创建普通数组
+  return Array.prototype.slice.call(array);
 }
 
 /**
- * Returns `true` if the given object is a typed array.
+ * 判断给定对象是否为类型化数组
  *
- * @param {any} object - The object to check.
- * @return {boolean} Whether the given object is a typed array.
+ * @param {any} object - 要检查的对象
+ * @return {boolean} 给定对象是否为类型化数组
  */
-function isTypedArray( object ) {
-
-	return ArrayBuffer.isView( object ) && ! ( object instanceof DataView );
-
+function isTypedArray(object) {
+  // 使用 ArrayBuffer.isView 检查是否为类型化数组，但排除 DataView
+  return ArrayBuffer.isView(object) && !(object instanceof DataView);
 }
 
 /**
- * Returns an array by which times and values can be sorted.
+ * 返回一个可用于对时间和值进行排序的数组
  *
- * @param {Array<number>} times - The keyframe time values.
- * @return {Array<number>} The array.
+ * @param {Array<number>} times - 关键帧时间值
+ * @return {Array<number>} 排序索引数组
  */
-function getKeyframeOrder( times ) {
+function getKeyframeOrder(times) {
+  // 比较函数：根据时间值比较两个索引
+  function compareTime(i, j) {
+    return times[i] - times[j];
+  }
 
-	function compareTime( i, j ) {
+  // 获取时间数组长度
+  const n = times.length;
+  // 创建索引数组
+  const result = new Array(n);
+  // 初始化索引数组，每个位置存储对应的索引值
+  for (let i = 0; i !== n; ++i) result[i] = i;
 
-		return times[ i ] - times[ j ];
+  // 根据时间值对索引进行排序
+  result.sort(compareTime);
 
-	}
-
-	const n = times.length;
-	const result = new Array( n );
-	for ( let i = 0; i !== n; ++ i ) result[ i ] = i;
-
-	result.sort( compareTime );
-
-	return result;
-
+  // 返回排序后的索引数组
+  return result;
 }
 
 /**
- * Sorts the given array by the previously computed order via `getKeyframeOrder()`.
+ * 根据之前通过 `getKeyframeOrder()` 计算的顺序对给定数组进行排序
  *
- * @param {Array<number>} values - The values to sort.
- * @param {number} stride - The stride.
- * @param {Array<number>} order - The sort order.
- * @return {Array<number>} The sorted values.
+ * @param {Array<number>} values - 要排序的值数组
+ * @param {number} stride - 步长（每个元素占用的数组位置数）
+ * @param {Array<number>} order - 排序顺序
+ * @return {Array<number>} 排序后的值数组
  */
-function sortedArray( values, stride, order ) {
+function sortedArray(values, stride, order) {
+  // 获取值数组的长度
+  const nValues = values.length;
+  // 创建与原数组相同类型的结果数组
+  const result = new values.constructor(nValues);
 
-	const nValues = values.length;
-	const result = new values.constructor( nValues );
+  // 遍历排序顺序，重新排列数据
+  for (let i = 0, dstOffset = 0; dstOffset !== nValues; ++i) {
+    // 计算源数据的偏移量
+    const srcOffset = order[i] * stride;
 
-	for ( let i = 0, dstOffset = 0; dstOffset !== nValues; ++ i ) {
+    // 复制一个完整的数据块（根据步长）
+    for (let j = 0; j !== stride; ++j) {
+      // 将源数据复制到目标位置
+      result[dstOffset++] = values[srcOffset + j];
+    }
+  }
 
-		const srcOffset = order[ i ] * stride;
-
-		for ( let j = 0; j !== stride; ++ j ) {
-
-			result[ dstOffset ++ ] = values[ srcOffset + j ];
-
-		}
-
-	}
-
-	return result;
-
+  // 返回排序后的结果数组
+  return result;
 }
 
 /**
- * Used for parsing AOS keyframe formats.
+ * 用于解析 AOS（Array of Structures）关键帧格式
  *
- * @param {Array<number>} jsonKeys - A list of JSON keyframes.
- * @param {Array<number>} times - This array will be filled with keyframe times by this function.
- * @param {Array<number>} values - This array will be filled with keyframe values by this function.
- * @param {string} valuePropertyName - The name of the property to use.
+ * @param {Array<number>} jsonKeys - JSON关键帧列表
+ * @param {Array<number>} times - 此函数将用关键帧时间填充此数组
+ * @param {Array<number>} values - 此函数将用关键帧值填充此数组
+ * @param {string} valuePropertyName - 要使用的属性名称
  */
-function flattenJSON( jsonKeys, times, values, valuePropertyName ) {
+function flattenJSON(jsonKeys, times, values, valuePropertyName) {
+  // 初始化索引和第一个关键帧
+  let i = 1,
+    key = jsonKeys[0];
 
-	let i = 1, key = jsonKeys[ 0 ];
+  // 寻找第一个包含指定属性的关键帧
+  while (key !== undefined && key[valuePropertyName] === undefined) {
+    key = jsonKeys[i++];
+  }
 
-	while ( key !== undefined && key[ valuePropertyName ] === undefined ) {
+  // 如果没有找到有效的关键帧，直接返回
+  if (key === undefined) return; // 没有数据
 
-		key = jsonKeys[ i ++ ];
+  // 获取第一个有效值
+  let value = key[valuePropertyName];
+  if (value === undefined) return; // 没有数据
 
-	}
+  // 根据值的类型采用不同的处理方式
+  if (Array.isArray(value)) {
+    // 处理数组类型的值
+    do {
+      // 获取当前关键帧的值
+      value = key[valuePropertyName];
 
-	if ( key === undefined ) return; // no data
+      if (value !== undefined) {
+        // 添加时间点
+        times.push(key.time);
+        // 展开数组并添加所有元素到值数组中
+        values.push(...value);
+      }
 
-	let value = key[ valuePropertyName ];
-	if ( value === undefined ) return; // no data
+      // 移动到下一个关键帧
+      key = jsonKeys[i++];
+    } while (key !== undefined);
+  } else if (value.toArray !== undefined) {
+    // 处理具有 toArray 方法的对象（如 THREE.js 的数学对象）
 
-	if ( Array.isArray( value ) ) {
+    do {
+      // 获取当前关键帧的值
+      value = key[valuePropertyName];
 
-		do {
+      if (value !== undefined) {
+        // 添加时间点
+        times.push(key.time);
+        // 使用 toArray 方法将对象转换为数组并添加到值数组中
+        value.toArray(values, values.length);
+      }
 
-			value = key[ valuePropertyName ];
+      // 移动到下一个关键帧
+      key = jsonKeys[i++];
+    } while (key !== undefined);
+  } else {
+    // 其他情况：直接推入值
 
-			if ( value !== undefined ) {
+    do {
+      // 获取当前关键帧的值
+      value = key[valuePropertyName];
 
-				times.push( key.time );
-				values.push( ...value ); // push all elements
+      if (value !== undefined) {
+        // 添加时间点
+        times.push(key.time);
+        // 直接添加值
+        values.push(value);
+      }
 
-			}
-
-			key = jsonKeys[ i ++ ];
-
-		} while ( key !== undefined );
-
-	} else if ( value.toArray !== undefined ) {
-
-		// ...assume THREE.Math-ish
-
-		do {
-
-			value = key[ valuePropertyName ];
-
-			if ( value !== undefined ) {
-
-				times.push( key.time );
-				value.toArray( values, values.length );
-
-			}
-
-			key = jsonKeys[ i ++ ];
-
-		} while ( key !== undefined );
-
-	} else {
-
-		// otherwise push as-is
-
-		do {
-
-			value = key[ valuePropertyName ];
-
-			if ( value !== undefined ) {
-
-				times.push( key.time );
-				values.push( value );
-
-			}
-
-			key = jsonKeys[ i ++ ];
-
-		} while ( key !== undefined );
-
-	}
-
+      // 移动到下一个关键帧
+      key = jsonKeys[i++];
+    } while (key !== undefined);
+  }
 }
 
 /**
- * Creates a new clip, containing only the segment of the original clip between the given frames.
+ * 创建一个新的动画片段，仅包含原始片段在给定帧之间的部分
  *
- * @param {AnimationClip} sourceClip - The values to sort.
- * @param {string} name - The name of the clip.
- * @param {number} startFrame - The start frame.
- * @param {number} endFrame - The end frame.
- * @param {number} [fps=30] - The FPS.
- * @return {AnimationClip} The new sub clip.
+ * @param {AnimationClip} sourceClip - 源动画片段
+ * @param {string} name - 片段名称
+ * @param {number} startFrame - 起始帧
+ * @param {number} endFrame - 结束帧
+ * @param {number} [fps=30] - 帧率
+ * @return {AnimationClip} 新的子片段
  */
-function subclip( sourceClip, name, startFrame, endFrame, fps = 30 ) {
+function subclip(sourceClip, name, startFrame, endFrame, fps = 30) {
+  // 克隆源动画片段
+  const clip = sourceClip.clone();
 
-	const clip = sourceClip.clone();
+  // 设置新片段的名称
+  clip.name = name;
 
-	clip.name = name;
+  // 存储处理后的轨道
+  const tracks = [];
 
-	const tracks = [];
+  // 遍历所有动画轨道
+  for (let i = 0; i < clip.tracks.length; ++i) {
+    const track = clip.tracks[i]; // 获取当前轨道
+    const valueSize = track.getValueSize(); // 获取每个关键帧值的大小
 
-	for ( let i = 0; i < clip.tracks.length; ++ i ) {
+    // 存储筛选后的时间和值
+    const times = [];
+    const values = [];
 
-		const track = clip.tracks[ i ];
-		const valueSize = track.getValueSize();
+    // 遍历轨道中的所有时间点
+    for (let j = 0; j < track.times.length; ++j) {
+      // 将时间转换为帧数
+      const frame = track.times[j] * fps;
 
-		const times = [];
-		const values = [];
+      // 跳过不在指定帧范围内的关键帧
+      if (frame < startFrame || frame >= endFrame) continue;
 
-		for ( let j = 0; j < track.times.length; ++ j ) {
+      // 添加符合条件的时间点
+      times.push(track.times[j]);
 
-			const frame = track.times[ j ] * fps;
+      // 添加对应的值（可能是多维的）
+      for (let k = 0; k < valueSize; ++k) {
+        values.push(track.values[j * valueSize + k]);
+      }
+    }
 
-			if ( frame < startFrame || frame >= endFrame ) continue;
+    // 如果没有符合条件的时间点，跳过此轨道
+    if (times.length === 0) continue;
 
-			times.push( track.times[ j ] );
+    // 将筛选后的数据转换为与原轨道相同的数组类型
+    track.times = convertArray(times, track.times.constructor);
+    track.values = convertArray(values, track.values.constructor);
 
-			for ( let k = 0; k < valueSize; ++ k ) {
+    // 将处理后的轨道添加到结果中
+    tracks.push(track);
+  }
 
-				values.push( track.values[ j * valueSize + k ] );
+  // 更新片段的轨道列表
+  clip.tracks = tracks;
 
-			}
+  // 在修剪后的片段中找到所有轨道的最小时间值
 
-		}
+  let minStartTime = Infinity;
 
-		if ( times.length === 0 ) continue;
+  // 遍历所有轨道，找到最早的开始时间
+  for (let i = 0; i < clip.tracks.length; ++i) {
+    if (minStartTime > clip.tracks[i].times[0]) {
+      minStartTime = clip.tracks[i].times[0];
+    }
+  }
 
-		track.times = convertArray( times, track.times.constructor );
-		track.values = convertArray( values, track.values.constructor );
+  // 移动所有轨道，使片段从 t=0 开始
 
-		tracks.push( track );
+  // 对所有轨道应用时间偏移
+  for (let i = 0; i < clip.tracks.length; ++i) {
+    clip.tracks[i].shift(-1 * minStartTime);
+  }
 
-	}
+  // 重新计算片段持续时间
+  clip.resetDuration();
 
-	clip.tracks = tracks;
-
-	// find minimum .times value across all tracks in the trimmed clip
-
-	let minStartTime = Infinity;
-
-	for ( let i = 0; i < clip.tracks.length; ++ i ) {
-
-		if ( minStartTime > clip.tracks[ i ].times[ 0 ] ) {
-
-			minStartTime = clip.tracks[ i ].times[ 0 ];
-
-		}
-
-	}
-
-	// shift all tracks such that clip begins at t=0
-
-	for ( let i = 0; i < clip.tracks.length; ++ i ) {
-
-		clip.tracks[ i ].shift( - 1 * minStartTime );
-
-	}
-
-	clip.resetDuration();
-
-	return clip;
-
+  // 返回处理后的片段
+  return clip;
 }
 
 /**
- * Converts the keyframes of the given animation clip to an additive format.
+ * 将给定动画片段的关键帧转换为加法格式
  *
- * @param {AnimationClip} targetClip - The clip to make additive.
- * @param {number} [referenceFrame=0] - The reference frame.
- * @param {AnimationClip} [referenceClip=targetClip] - The reference clip.
- * @param {number} [fps=30] - The FPS.
- * @return {AnimationClip} The updated clip which is now additive.
+ * @param {AnimationClip} targetClip - 要转换为加法的片段
+ * @param {number} [referenceFrame=0] - 参考帧
+ * @param {AnimationClip} [referenceClip=targetClip] - 参考片段
+ * @param {number} [fps=30] - 帧率
+ * @return {AnimationClip} 更新后的片段，现在是加法格式
  */
-function makeClipAdditive( targetClip, referenceFrame = 0, referenceClip = targetClip, fps = 30 ) {
+function makeClipAdditive(targetClip, referenceFrame = 0, referenceClip = targetClip, fps = 30) {
+  // 确保帧率有效
+  if (fps <= 0) fps = 30;
 
-	if ( fps <= 0 ) fps = 30;
+  // 获取参考片段的轨道数量
+  const numTracks = referenceClip.tracks.length;
+  // 计算参考时间
+  const referenceTime = referenceFrame / fps;
 
-	const numTracks = referenceClip.tracks.length;
-	const referenceTime = referenceFrame / fps;
+  // 使每个轨道的值相对于参考帧的值
+  for (let i = 0; i < numTracks; ++i) {
+    const referenceTrack = referenceClip.tracks[i]; // 获取参考轨道
+    const referenceTrackType = referenceTrack.ValueTypeName; // 获取轨道值类型
 
-	// Make each track's values relative to the values at the reference frame
-	for ( let i = 0; i < numTracks; ++ i ) {
+    // 跳过非数值类型的轨道
+    if (referenceTrackType === "bool" || referenceTrackType === "string") continue;
 
-		const referenceTrack = referenceClip.tracks[ i ];
-		const referenceTrackType = referenceTrack.ValueTypeName;
+    // 在目标片段中找到名称和类型与参考轨道匹配的轨道
+    const targetTrack = targetClip.tracks.find(function (track) {
+      return track.name === referenceTrack.name && track.ValueTypeName === referenceTrackType;
+    });
 
-		// Skip this track if it's non-numeric
-		if ( referenceTrackType === 'bool' || referenceTrackType === 'string' ) continue;
+    // 如果没有找到匹配的轨道，跳过
+    if (targetTrack === undefined) continue;
 
-		// Find the track in the target clip whose name and type matches the reference track
-		const targetTrack = targetClip.tracks.find( function ( track ) {
+    // 初始化参考偏移量
+    let referenceOffset = 0;
+    const referenceValueSize = referenceTrack.getValueSize(); // 获取参考轨道值大小
 
-			return track.name === referenceTrack.name
-				&& track.ValueTypeName === referenceTrackType;
+    // 如果是 GLTF 立方样条插值，调整偏移量
+    if (referenceTrack.createInterpolant.isInterpolantFactoryMethodGLTFCubicSpline) {
+      referenceOffset = referenceValueSize / 3;
+    }
 
-		} );
+    // 初始化目标偏移量
+    let targetOffset = 0;
+    const targetValueSize = targetTrack.getValueSize(); // 获取目标轨道值大小
 
-		if ( targetTrack === undefined ) continue;
+    // 如果是 GLTF 立方样条插值，调整偏移量
+    if (targetTrack.createInterpolant.isInterpolantFactoryMethodGLTFCubicSpline) {
+      targetOffset = targetValueSize / 3;
+    }
 
-		let referenceOffset = 0;
-		const referenceValueSize = referenceTrack.getValueSize();
+    // 获取最后一个关键帧的索引
+    const lastIndex = referenceTrack.times.length - 1;
+    let referenceValue; // 存储参考值
 
-		if ( referenceTrack.createInterpolant.isInterpolantFactoryMethodGLTFCubicSpline ) {
+    // 找到要从轨道中减去的值
+    if (referenceTime <= referenceTrack.times[0]) {
+      // 参考帧早于第一个关键帧，使用第一个关键帧
+      const startIndex = referenceOffset;
+      const endIndex = referenceValueSize - referenceOffset;
+      referenceValue = referenceTrack.values.slice(startIndex, endIndex);
+    } else if (referenceTime >= referenceTrack.times[lastIndex]) {
+      // 参考帧晚于最后一个关键帧，使用最后一个关键帧
+      const startIndex = lastIndex * referenceValueSize + referenceOffset;
+      const endIndex = startIndex + referenceValueSize - referenceOffset;
+      referenceValue = referenceTrack.values.slice(startIndex, endIndex);
+    } else {
+      // 插值到参考值
+      const interpolant = referenceTrack.createInterpolant(); // 创建插值器
+      const startIndex = referenceOffset;
+      const endIndex = referenceValueSize - referenceOffset;
+      interpolant.evaluate(referenceTime); // 在参考时间进行插值
+      referenceValue = interpolant.resultBuffer.slice(startIndex, endIndex);
+    }
 
-			referenceOffset = referenceValueSize / 3;
+    // 对四元数进行共轭操作
+    if (referenceTrackType === "quaternion") {
+      const referenceQuat = new Quaternion().fromArray(referenceValue).normalize().conjugate();
+      referenceQuat.toArray(referenceValue);
+    }
 
-		}
+    // 从所有轨道值中减去参考值
 
-		let targetOffset = 0;
-		const targetValueSize = targetTrack.getValueSize();
+    const numTimes = targetTrack.times.length; // 获取目标轨道的时间点数量
+    for (let j = 0; j < numTimes; ++j) {
+      // 计算当前值的起始位置
+      const valueStart = j * targetValueSize + targetOffset;
 
-		if ( targetTrack.createInterpolant.isInterpolantFactoryMethodGLTFCubicSpline ) {
+      if (referenceTrackType === "quaternion") {
+        // 对四元数轨道类型进行共轭乘法
+        Quaternion.multiplyQuaternionsFlat(targetTrack.values, valueStart, referenceValue, 0, targetTrack.values, valueStart);
+      } else {
+        // 计算值的结束位置
+        const valueEnd = targetValueSize - targetOffset * 2;
 
-			targetOffset = targetValueSize / 3;
+        // 对所有其他数值轨道类型减去每个值
+        for (let k = 0; k < valueEnd; ++k) {
+          targetTrack.values[valueStart + k] -= referenceValue[k];
+        }
+      }
+    }
+  }
 
-		}
+  // 设置目标片段的混合模式为加法模式
+  targetClip.blendMode = AdditiveAnimationBlendMode;
 
-		const lastIndex = referenceTrack.times.length - 1;
-		let referenceValue;
-
-		// Find the value to subtract out of the track
-		if ( referenceTime <= referenceTrack.times[ 0 ] ) {
-
-			// Reference frame is earlier than the first keyframe, so just use the first keyframe
-			const startIndex = referenceOffset;
-			const endIndex = referenceValueSize - referenceOffset;
-			referenceValue = referenceTrack.values.slice( startIndex, endIndex );
-
-		} else if ( referenceTime >= referenceTrack.times[ lastIndex ] ) {
-
-			// Reference frame is after the last keyframe, so just use the last keyframe
-			const startIndex = lastIndex * referenceValueSize + referenceOffset;
-			const endIndex = startIndex + referenceValueSize - referenceOffset;
-			referenceValue = referenceTrack.values.slice( startIndex, endIndex );
-
-		} else {
-
-			// Interpolate to the reference value
-			const interpolant = referenceTrack.createInterpolant();
-			const startIndex = referenceOffset;
-			const endIndex = referenceValueSize - referenceOffset;
-			interpolant.evaluate( referenceTime );
-			referenceValue = interpolant.resultBuffer.slice( startIndex, endIndex );
-
-		}
-
-		// Conjugate the quaternion
-		if ( referenceTrackType === 'quaternion' ) {
-
-			const referenceQuat = new Quaternion().fromArray( referenceValue ).normalize().conjugate();
-			referenceQuat.toArray( referenceValue );
-
-		}
-
-		// Subtract the reference value from all of the track values
-
-		const numTimes = targetTrack.times.length;
-		for ( let j = 0; j < numTimes; ++ j ) {
-
-			const valueStart = j * targetValueSize + targetOffset;
-
-			if ( referenceTrackType === 'quaternion' ) {
-
-				// Multiply the conjugate for quaternion track types
-				Quaternion.multiplyQuaternionsFlat(
-					targetTrack.values,
-					valueStart,
-					referenceValue,
-					0,
-					targetTrack.values,
-					valueStart
-				);
-
-			} else {
-
-				const valueEnd = targetValueSize - targetOffset * 2;
-
-				// Subtract each value for all other numeric track types
-				for ( let k = 0; k < valueEnd; ++ k ) {
-
-					targetTrack.values[ valueStart + k ] -= referenceValue[ k ];
-
-				}
-
-			}
-
-		}
-
-	}
-
-	targetClip.blendMode = AdditiveAnimationBlendMode;
-
-	return targetClip;
-
+  // 返回更新后的片段
+  return targetClip;
 }
 
 /**
- * A class with various methods to assist with animations.
+ * 包含各种辅助动画方法的工具类
  *
  * @hideconstructor
  */
 class AnimationUtils {
+  /**
+   * 将数组转换为指定类型
+   *
+   * @static
+   * @param {TypedArray|Array} array - 要转换的数组
+   * @param {TypedArray.constructor} type - 类型数组的构造函数
+   * @return {TypedArray} 转换后的数组
+   */
+  static convertArray(array, type) {
+    // 调用模块级别的 convertArray 函数
+    return convertArray(array, type);
+  }
 
-	/**
-	 * Converts an array to a specific type
-	 *
-	 * @static
-	 * @param {TypedArray|Array} array - The array to convert.
-	 * @param {TypedArray.constructor} type - The constructor of a type array.
-	 * @return {TypedArray} The converted array
-	 */
-	static convertArray( array, type ) {
+  /**
+   * 判断给定对象是否为类型化数组
+   *
+   * @static
+   * @param {any} object - 要检查的对象
+   * @return {boolean} 给定对象是否为类型化数组
+   */
+  static isTypedArray(object) {
+    // 调用模块级别的 isTypedArray 函数
+    return isTypedArray(object);
+  }
 
-		return convertArray( array, type );
+  /**
+   * 返回一个可用于对时间和值进行排序的数组
+   *
+   * @static
+   * @param {Array<number>} times - 关键帧时间值
+   * @return {Array<number>} 排序索引数组
+   */
+  static getKeyframeOrder(times) {
+    // 调用模块级别的 getKeyframeOrder 函数
+    return getKeyframeOrder(times);
+  }
 
-	}
+  /**
+   * 根据之前通过 `getKeyframeOrder()` 计算的顺序对给定数组进行排序
+   *
+   * @static
+   * @param {Array<number>} values - 要排序的值数组
+   * @param {number} stride - 步长
+   * @param {Array<number>} order - 排序顺序
+   * @return {Array<number>} 排序后的值数组
+   */
+  static sortedArray(values, stride, order) {
+    // 调用模块级别的 sortedArray 函数
+    return sortedArray(values, stride, order);
+  }
 
-	/**
-	 * Returns `true` if the given object is a typed array.
-	 *
-	 * @static
-	 * @param {any} object - The object to check.
-	 * @return {boolean} Whether the given object is a typed array.
-	 */
-	static isTypedArray( object ) {
+  /**
+   * 用于解析 AOS 关键帧格式
+   *
+   * @static
+   * @param {Array<number>} jsonKeys - JSON关键帧列表
+   * @param {Array<number>} times - 此方法将用关键帧时间填充此数组
+   * @param {Array<number>} values - 此方法将用关键帧值填充此数组
+   * @param {string} valuePropertyName - 要使用的属性名称
+   */
+  static flattenJSON(jsonKeys, times, values, valuePropertyName) {
+    // 调用模块级别的 flattenJSON 函数
+    flattenJSON(jsonKeys, times, values, valuePropertyName);
+  }
 
-		return isTypedArray( object );
+  /**
+   * 创建一个新的动画片段，仅包含原始片段在给定帧之间的部分
+   *
+   * @static
+   * @param {AnimationClip} sourceClip - 源动画片段
+   * @param {string} name - 片段名称
+   * @param {number} startFrame - 起始帧
+   * @param {number} endFrame - 结束帧
+   * @param {number} [fps=30] - 帧率
+   * @return {AnimationClip} 新的子片段
+   */
+  static subclip(sourceClip, name, startFrame, endFrame, fps = 30) {
+    // 调用模块级别的 subclip 函数
+    return subclip(sourceClip, name, startFrame, endFrame, fps);
+  }
 
-	}
-
-	/**
-	 * Returns an array by which times and values can be sorted.
-	 *
-	 * @static
-	 * @param {Array<number>} times - The keyframe time values.
-	 * @return {Array<number>} The array.
-	 */
-	static getKeyframeOrder( times ) {
-
-		return getKeyframeOrder( times );
-
-	}
-
-	/**
-	 * Sorts the given array by the previously computed order via `getKeyframeOrder()`.
-	 *
-	 * @static
-	 * @param {Array<number>} values - The values to sort.
-	 * @param {number} stride - The stride.
-	 * @param {Array<number>} order - The sort order.
-	 * @return {Array<number>} The sorted values.
-	 */
-	static sortedArray( values, stride, order ) {
-
-		return sortedArray( values, stride, order );
-
-	}
-
-	/**
-	 * Used for parsing AOS keyframe formats.
-	 *
-	 * @static
-	 * @param {Array<number>} jsonKeys - A list of JSON keyframes.
-	 * @param {Array<number>} times - This array will be filled with keyframe times by this method.
-	 * @param {Array<number>} values - This array will be filled with keyframe values by this method.
-	 * @param {string} valuePropertyName - The name of the property to use.
-	 */
-	static flattenJSON( jsonKeys, times, values, valuePropertyName ) {
-
-		flattenJSON( jsonKeys, times, values, valuePropertyName );
-
-	}
-
-	/**
-	 * Creates a new clip, containing only the segment of the original clip between the given frames.
-	 *
-	 * @static
-	 * @param {AnimationClip} sourceClip - The values to sort.
-	 * @param {string} name - The name of the clip.
-	 * @param {number} startFrame - The start frame.
-	 * @param {number} endFrame - The end frame.
-	 * @param {number} [fps=30] - The FPS.
-	 * @return {AnimationClip} The new sub clip.
-	 */
-	static subclip( sourceClip, name, startFrame, endFrame, fps = 30 ) {
-
-		return subclip( sourceClip, name, startFrame, endFrame, fps );
-
-	}
-
-	/**
-	 * Converts the keyframes of the given animation clip to an additive format.
-	 *
-	 * @static
-	 * @param {AnimationClip} targetClip - The clip to make additive.
-	 * @param {number} [referenceFrame=0] - The reference frame.
-	 * @param {AnimationClip} [referenceClip=targetClip] - The reference clip.
-	 * @param {number} [fps=30] - The FPS.
-	 * @return {AnimationClip} The updated clip which is now additive.
-	 */
-	static makeClipAdditive( targetClip, referenceFrame = 0, referenceClip = targetClip, fps = 30 ) {
-
-		return makeClipAdditive( targetClip, referenceFrame, referenceClip, fps );
-
-	}
-
+  /**
+   * 将给定动画片段的关键帧转换为加法格式
+   *
+   * @static
+   * @param {AnimationClip} targetClip - 要转换为加法的片段
+   * @param {number} [referenceFrame=0] - 参考帧
+   * @param {AnimationClip} [referenceClip=targetClip] - 参考片段
+   * @param {number} [fps=30] - 帧率
+   * @return {AnimationClip} 更新后的片段，现在是加法格式
+   */
+  static makeClipAdditive(targetClip, referenceFrame = 0, referenceClip = targetClip, fps = 30) {
+    // 调用模块级别的 makeClipAdditive 函数
+    return makeClipAdditive(targetClip, referenceFrame, referenceClip, fps);
+  }
 }
 
+// 导出所有动画工具函数和类
 export {
-	convertArray,
-	isTypedArray,
-	getKeyframeOrder,
-	sortedArray,
-	flattenJSON,
-	subclip,
-	makeClipAdditive,
-	AnimationUtils
+  convertArray, // 数组类型转换函数
+  isTypedArray, // 类型化数组检查函数
+  getKeyframeOrder, // 关键帧排序索引生成函数
+  sortedArray, // 数组排序函数
+  flattenJSON, // JSON关键帧扁平化函数
+  subclip, // 动画片段裁剪函数
+  makeClipAdditive, // 动画片段加法转换函数
+  AnimationUtils, // 动画工具类
 };

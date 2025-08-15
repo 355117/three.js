@@ -1,15 +1,15 @@
 /**
- * This class can be used to analyse audio data.
+ * 此类可用于分析音频数据。
  *
  * ```js
- * // create an AudioListener and add it to the camera
+ * // 创建一个AudioListener并将其添加到相机
  * const listener = new THREE.AudioListener();
  * camera.add( listener );
  *
- * // create an Audio source
+ * // 创建一个音频源
  * const sound = new THREE.Audio( listener );
  *
- * // load a sound and set it as the Audio object's buffer
+ * // 加载声音并将其设置为Audio对象的缓冲区
  * const audioLoader = new THREE.AudioLoader();
  * audioLoader.load( 'sounds/ambient.ogg', function( buffer ) {
  * 	sound.setBuffer( buffer );
@@ -18,80 +18,78 @@
  * 	sound.play();
  * });
  *
- * // create an AudioAnalyser, passing in the sound and desired fftSize
+ * // 创建一个AudioAnalyser，传入声音和所需的fftSize
  * const analyser = new THREE.AudioAnalyser( sound, 32 );
  *
- * // get the average frequency of the sound
+ * // 获取声音的平均频率
  * const data = analyser.getAverageFrequency();
  * ```
  */
 class AudioAnalyser {
+  /**
+   * 构造一个新的音频分析器。
+   *
+   * @param {Audio} audio - 要分析的音频。
+   * @param {number} [fftSize=2048] - 执行快速傅里叶变换（FFT）以获取频域数据时使用的样本窗口大小。
+   */
+  constructor(audio, fftSize = 2048) {
+    /**
+     * 音频分析器节点。
+     *
+     * @type {AnalyserNode}
+     */
+    this.analyser = audio.context.createAnalyser(); // 创建分析器节点
+    this.analyser.fftSize = fftSize; // 设置FFT大小
 
-	/**
-	 * Constructs a new audio analyzer.
-	 *
-	 * @param {Audio} audio - The audio to analyze.
-	 * @param {number} [fftSize=2048] - The window size in samples that is used when performing a Fast Fourier Transform (FFT) to get frequency domain data.
-	 */
-	constructor( audio, fftSize = 2048 ) {
+    /**
+     * 保存分析后的数据。
+     *
+     * @type {Uint8Array}
+     */
+    this.data = new Uint8Array(this.analyser.frequencyBinCount); // 创建数据数组
 
-		/**
-		 * The global audio listener.
-		 *
-		 * @type {AnalyserNode}
-		 */
-		this.analyser = audio.context.createAnalyser();
-		this.analyser.fftSize = fftSize;
+    // 将音频输出连接到分析器
+    audio.getOutput().connect(this.analyser);
+  }
 
-		/**
-		 * Holds the analyzed data.
-		 *
-		 * @type {Uint8Array}
-		 */
-		this.data = new Uint8Array( this.analyser.frequencyBinCount );
+  /**
+   * 返回包含音频频率数据的数组。
+   *
+   * 数组中的每个项目表示特定频率的分贝值。
+   * 频率从0线性分布到采样率的1/2。
+   * 例如，对于48000采样率，数组的最后一项将表示
+   * 24000 Hz的分贝值。
+   *
+   * @return {Uint8Array} 频率数据。
+   */
+  getFrequencyData() {
+    // 获取字节频率数据
+    this.analyser.getByteFrequencyData(this.data);
 
-		audio.getOutput().connect( this.analyser );
+    // 返回频率数据
+    return this.data;
+  }
 
-	}
+  /**
+   * 返回由 {@link AudioAnalyser#getFrequencyData} 返回的频率的平均值。
+   *
+   * @return {number} 平均频率。
+   */
+  getAverageFrequency() {
+    // 初始化累加值
+    let value = 0;
+    // 获取频率数据
+    const data = this.getFrequencyData();
 
-	/**
-	 * Returns an array with frequency data of the audio.
-	 *
-	 * Each item in the array represents the decibel value for a specific frequency.
-	 * The frequencies are spread linearly from 0 to 1/2 of the sample rate.
-	 * For example, for 48000 sample rate, the last item of the array will represent
-	 * the decibel value for 24000 Hz.
-	 *
-	 * @return {Uint8Array} The frequency data.
-	 */
-	getFrequencyData() {
+    // 遍历所有频率数据并累加
+    for (let i = 0; i < data.length; i++) {
+      value += data[i];
+    }
 
-		this.analyser.getByteFrequencyData( this.data );
-
-		return this.data;
-
-	}
-
-	/**
-	 * Returns the average of the frequencies returned by {@link AudioAnalyser#getFrequencyData}.
-	 *
-	 * @return {number} The average frequency.
-	 */
-	getAverageFrequency() {
-
-		let value = 0;
-		const data = this.getFrequencyData();
-
-		for ( let i = 0; i < data.length; i ++ ) {
-
-			value += data[ i ];
-
-		}
-
-		return value / data.length;
-
-	}
-
+    // 返回平均值
+    return value / data.length;
+  }
 }
 
+// 导出AudioAnalyser类
 export { AudioAnalyser };
