@@ -246,7 +246,7 @@ function createColorManagement() {
   return ColorManagement;
 }
 
-// 导出颜色管理单例对象
+// 导出颜色管理对象
 export const ColorManagement = /*@__PURE__*/ createColorManagement();
 
 /**

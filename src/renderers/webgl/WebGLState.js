@@ -765,7 +765,7 @@ function WebGLState(gl, extensions) {
    */
   function createTexture(type, target, count, dimensions) {
     // 创建4字节的数据数组，匹配默认的4字节对齐
-    const data = new Uint8Array(4); // 4 is required to match default unpack alignment of 4.
+    const data = new Uint8Array(4); // 4是必需的，以匹配默认的解包对齐方式4。
     // 创建WebGL纹理对象
     const texture = gl.createTexture();
 
@@ -931,6 +931,7 @@ function WebGLState(gl, extensions) {
       }
     } else {
       // 渲染到默认帧缓冲区时使用BACK缓冲区
+      //当渲染到屏幕时，必须将绘制目标设置为 gl.BACK
       if (drawBuffers[0] !== gl.BACK) {
         drawBuffers[0] = gl.BACK;
 
@@ -1235,7 +1236,7 @@ function WebGLState(gl, extensions) {
    *
    * 控制前面的定义方向（顺时针或逆时针）。
    * 这影响面剔除和光照计算。
-   *
+   * back是顺时针，front是逆时针。
    * @param {boolean} flipSided - 是否翻转面，true为顺时针，false为逆时针
    */
   function setFlipSided(flipSided) {

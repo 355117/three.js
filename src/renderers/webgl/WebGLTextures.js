@@ -276,9 +276,22 @@ function WebGLTextures(_gl, extensions, state, properties, capabilities, utils, 
    */
   function getInternalFormat(internalFormatName, glFormat, glType, colorSpace, forceLinearTransfer = false) {
     // 如果指定了内部格式名称，尝试使用它
+    // 这里处理用户显式指定的WebGL内部格式常量名称，如：'RGBA8'、'RGB32F'、'SRGB8_ALPHA8'等
     if (internalFormatName !== null) {
+      // 检查WebGL上下文是否支持该内部格式常量
+      // 示例：当internalFormatName = 'RGBA8'时，检查_gl.RGBA8是否存在
+      //       当internalFormatName = 'RGB32F'时，检查_gl.RGB32F是否存在
+      //       当internalFormatName = 'SRGB8_ALPHA8'时，检查_gl.SRGB8_ALPHA8是否存在
       if (_gl[internalFormatName] !== undefined) return _gl[internalFormatName];
 
+      // 如果指定的内部格式在当前WebGL上下文中不存在，发出警告
+      // 示例警告信息：
+      // "THREE.WebGLRenderer: Attempt to use non-existing WebGL internal format 'RGBA32UI'"
+      // "THREE.WebGLRenderer: Attempt to use non-existing WebGL internal format 'RGB9_E5'"
+      // 这通常发生在：
+      // 1. 使用了WebGL 1.0不支持的格式（如整数格式）
+      // 2. 使用了需要特定扩展的格式但扩展未启用
+      // 3. 拼写错误的格式名称
       console.warn("THREE.WebGLRenderer: Attempt to use non-existing WebGL internal format '" + internalFormatName + "'");
     }
 
@@ -421,6 +434,26 @@ function WebGLTextures(_gl, extensions, state, properties, capabilities, utils, 
     // 如果需要生成mipmap或者是帧缓冲纹理且使用了mipmap过滤
     if (textureNeedsGenerateMipmaps(texture) === true || (texture.isFramebufferTexture && texture.minFilter !== NearestFilter && texture.minFilter !== LinearFilter)) {
       // 根据图像的最大尺寸计算mipmap级别数
+      // 使用对数公式：log₂(max_size) + 1 来计算完整的mipmap链级别数
+      // 示例数据：
+      // - 对于512×512纹理：Math.log2(Math.max(512, 512)) + 1 = Math.log2(512) + 1 = 9 + 1 = 10级
+      // - 对于1024×512纹理：Math.log2(Math.max(1024, 512)) + 1 = Math.log2(1024) + 1 = 10 + 1 = 11级
+      // - 对于256×256纹理：Math.log2(Math.max(256, 256)) + 1 = Math.log2(256) + 1 = 8 + 1 = 9级
+      // - 对于64×32纹理：Math.log2(Math.max(64, 32)) + 1 = Math.log2(64) + 1 = 6 + 1 = 7级
+      // - 对于2048×1024纹理：Math.log2(Math.max(2048, 1024)) + 1 = Math.log2(2048) + 1 = 11 + 1 = 12级
+      //
+      // Mipmap级别分解（以512×512为例）：
+      // Level 0: 512×512 (原始尺寸)
+      // Level 1: 256×256
+      // Level 2: 128×128
+      // Level 3: 64×64
+      // Level 4: 32×32
+      // Level 5: 16×16
+      // Level 6: 8×8
+      // Level 7: 4×4
+      // Level 8: 2×2
+      // Level 9: 1×1 (最小级别)
+      // 总计：10个级别
       return Math.log2(Math.max(image.width, image.height)) + 1;
     } else if (texture.mipmaps !== undefined && texture.mipmaps.length > 0) {
       // 用户自定义的mipmaps
@@ -1143,6 +1176,31 @@ function WebGLTextures(_gl, extensions, state, properties, capabilities, utils, 
       const mipmaps = texture.mipmaps;
 
       // 确定是否使用texStorage（视频纹理不使用）
+      /* 
+      视频纹理的特殊性：
+
+      动态尺寸：视频帧的尺寸可能在运行时改变
+      格式变化：视频编码格式可能动态调整
+      频繁更新：视频纹理需要每帧更新内容
+      浏览器优化：浏览器对视频纹理有特殊的优化路径
+      texStorage 的限制：
+
+      创建后尺寸和格式不可变
+      适合静态或尺寸固定的纹理
+      提供更好的性能优化机会
+
+      使用 texStorage 的优势：
+
+      GPU内存管理：提前分配固定大小的存储空间
+      性能优化：GPU驱动可以进行更好的优化
+      避免重新分配：减少内存碎片和分配开销
+      类型安全：格式一致性保证
+      视频纹理使用 texImage 的原因：
+          
+      灵活性：支持动态尺寸和格式变化
+      兼容性：更好地支持各种视频编码格式
+      浏览器优化：利用浏览器的视频解码优化
+       */
       const useTexStorage = texture.isVideoTexture !== true;
       // 确定是否需要分配内存（新纹理或强制上传）
       const allocateMemory = sourceProperties.__version === undefined || forceUpload === true;
