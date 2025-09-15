@@ -1,93 +1,93 @@
-export default /* glsl */`
-#ifdef USE_TRANSMISSION
+export default /* glsl */` // 导出GLSL片段开始
+#ifdef USE_TRANSMISSION // 若启用透射
 
-	// Transmission code is based on glTF-Sampler-Viewer
-	// https://github.com/KhronosGroup/glTF-Sample-Viewer
+	// Transmission code is based on glTF-Sampler-Viewer // 透射实现基于glTF示例查看器
+	// https://github.com/KhronosGroup/glTF-Sample-Viewer // 参考链接
 
-	uniform float transmission;
-	uniform float thickness;
-	uniform float attenuationDistance;
-	uniform vec3 attenuationColor;
+	uniform float transmission; // 透射强度
+	uniform float thickness; // 厚度（局部空间）
+	uniform float attenuationDistance; // 吸收距离
+	uniform vec3 attenuationColor; // 吸收颜色
 
-	#ifdef USE_TRANSMISSIONMAP
+	#ifdef USE_TRANSMISSIONMAP // 透射贴图
 
-		uniform sampler2D transmissionMap;
+		uniform sampler2D transmissionMap; // 透射贴图采样器
 
-	#endif
+	#endif // 结束USE_TRANSMISSIONMAP
 
-	#ifdef USE_THICKNESSMAP
+	#ifdef USE_THICKNESSMAP // 厚度贴图
 
-		uniform sampler2D thicknessMap;
+		uniform sampler2D thicknessMap; // 厚度贴图采样器
 
-	#endif
+	#endif // 结束USE_THICKNESSMAP
 
-	uniform vec2 transmissionSamplerSize;
-	uniform sampler2D transmissionSamplerMap;
+	uniform vec2 transmissionSamplerSize; // 透射采样缓冲尺寸
+	uniform sampler2D transmissionSamplerMap; // 透射采样缓冲纹理
 
-	uniform mat4 modelMatrix;
-	uniform mat4 projectionMatrix;
+	uniform mat4 modelMatrix; // 模型矩阵
+	uniform mat4 projectionMatrix; // 投影矩阵
 
-	varying vec3 vWorldPosition;
+	varying vec3 vWorldPosition; // 片元世界位置
 
-	// Mipped Bicubic Texture Filtering by N8
-	// https://www.shadertoy.com/view/Dl2SDW
+	// Mipped Bicubic Texture Filtering by N8 // 带mip的双三次过滤
+	// https://www.shadertoy.com/view/Dl2SDW // 参考链接
 
-	float w0( float a ) {
+	float w0( float a ) { // 权重函数w0
 
 		return ( 1.0 / 6.0 ) * ( a * ( a * ( - a + 3.0 ) - 3.0 ) + 1.0 );
 
 	}
 
-	float w1( float a ) {
+	float w1( float a ) { // 权重函数w1
 
 		return ( 1.0 / 6.0 ) * ( a *  a * ( 3.0 * a - 6.0 ) + 4.0 );
 
 	}
 
-	float w2( float a ){
+	float w2( float a ){ // 权重函数w2
 
 		return ( 1.0 / 6.0 ) * ( a * ( a * ( - 3.0 * a + 3.0 ) + 3.0 ) + 1.0 );
 
 	}
 
-	float w3( float a ) {
+	float w3( float a ) { // 权重函数w3
 
 		return ( 1.0 / 6.0 ) * ( a * a * a );
 
 	}
 
-	// g0 and g1 are the two amplitude functions
-	float g0( float a ) {
+	// g0 and g1 are the two amplitude functions // 两个幅度函数
+	float g0( float a ) { // g0
 
 		return w0( a ) + w1( a );
 
 	}
 
-	float g1( float a ) {
+	float g1( float a ) { // g1
 
 		return w2( a ) + w3( a );
 
 	}
 
-	// h0 and h1 are the two offset functions
-	float h0( float a ) {
+	// h0 and h1 are the two offset functions // 两个偏移函数
+	float h0( float a ) { // h0
 
 		return - 1.0 + w1( a ) / ( w0( a ) + w1( a ) );
 
 	}
 
-	float h1( float a ) {
+	float h1( float a ) { // h1
 
 		return 1.0 + w3( a ) / ( w2( a ) + w3( a ) );
 
 	}
 
-	vec4 bicubic( sampler2D tex, vec2 uv, vec4 texelSize, float lod ) {
+	vec4 bicubic( sampler2D tex, vec2 uv, vec4 texelSize, float lod ) { // 双三次采样
 
-		uv = uv * texelSize.zw + 0.5;
+		uv = uv * texelSize.zw + 0.5; // 转到像素中心
 
-		vec2 iuv = floor( uv );
-		vec2 fuv = fract( uv );
+		vec2 iuv = floor( uv ); // 整数像素
+		vec2 fuv = fract( uv ); // 小数像素
 
 		float g0x = g0( fuv.x );
 		float g1x = g1( fuv.x );
@@ -106,7 +106,7 @@ export default /* glsl */`
 
 	}
 
-	vec4 textureBicubic( sampler2D sampler, vec2 uv, float lod ) {
+	vec4 textureBicubic( sampler2D sampler, vec2 uv, float lod ) { // 双三次采样封装
 
 		vec2 fLodSize = vec2( textureSize( sampler, int( lod ) ) );
 		vec2 cLodSize = vec2( textureSize( sampler, int( lod + 1.0 ) ) );
@@ -118,7 +118,7 @@ export default /* glsl */`
 
 	}
 
-	vec3 getVolumeTransmissionRay( const in vec3 n, const in vec3 v, const in float thickness, const in float ior, const in mat4 modelMatrix ) {
+	vec3 getVolumeTransmissionRay( const in vec3 n, const in vec3 v, const in float thickness, const in float ior, const in mat4 modelMatrix ) { // 体积折射射线
 
 		// Direction of refracted light.
 		vec3 refractionVector = refract( - v, normalize( n ), 1.0 / ior );
@@ -134,7 +134,7 @@ export default /* glsl */`
 
 	}
 
-	float applyIorToRoughness( const in float roughness, const in float ior ) {
+	float applyIorToRoughness( const in float roughness, const in float ior ) { // IOR影响粗糙度
 
 		// Scale roughness with IOR so that an IOR of 1.0 results in no microfacet refraction and
 		// an IOR of 1.5 results in the default amount of microfacet refraction.
@@ -142,7 +142,7 @@ export default /* glsl */`
 
 	}
 
-	vec4 getTransmissionSample( const in vec2 fragCoord, const in float roughness, const in float ior ) {
+	vec4 getTransmissionSample( const in vec2 fragCoord, const in float roughness, const in float ior ) { // 获取透射样本
 
 		float lod = log2( transmissionSamplerSize.x ) * applyIorToRoughness( roughness, ior );
 		return textureBicubic( transmissionSamplerMap, fragCoord.xy, lod );

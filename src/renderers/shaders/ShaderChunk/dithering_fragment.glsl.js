@@ -1,7 +1,7 @@
 export default /* glsl */`
-#ifdef DITHERING
+#ifdef DITHERING // 若启用抖动
 
-	gl_FragColor.rgb = dithering( gl_FragColor.rgb );
+	gl_FragColor.rgb = dithering( gl_FragColor.rgb ); // 对 RGB 进行抖动处理，减轻色带
 
-#endif
+#endif // 结束：DITHERING
 `;
