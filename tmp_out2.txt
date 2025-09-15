@@ -1,0 +1,220 @@
+	 * @param {?string} depthSnippet - A WGSL snippet that represents 0-based texture array index to sample.
+	 * @param {string} [shaderStage=this.shaderStage] - The shader stage this code snippet is generated for.
+	 * @return {string} The WGSL snippet.
+	 */
+	_generateTextureSample( texture, textureProperty, uvSnippet, depthSnippet, shaderStage = this.shaderStage ) {
+
+		if ( shaderStage === 'fragment' ) {
+
+			if ( depthSnippet ) {
+
+				return `textureSample( ${ textureProperty }, ${ textureProperty }_sampler, ${ uvSnippet }, ${ depthSnippet } )`;
+
+			} else {
+
+				return `textureSample( ${ textureProperty }, ${ textureProperty }_sampler, ${ uvSnippet } )`;
+
+			}
+
+		} else {
+
+			return this.generateTextureSampleLevel( texture, textureProperty, uvSnippet, '0', depthSnippet );
+
+		}
+
+	}
+
+	/**
+	 * Generates the WGSL snippet when sampling textures with explicit mip level.
+	 *
+	 * @private
+	 * @param {Texture} texture - The texture.
+	 * @param {string} textureProperty - The name of the texture uniform in the shader.
+	 * @param {string} uvSnippet - A WGSL snippet that represents texture coordinates used for sampling.
+	 * @param {string} levelSnippet - A WGSL snippet that represents the mip level, with level 0 containing a full size version of the texture.
+	 * @param {string} depthSnippet - A WGSL snippet that represents 0-based texture array index to sample.
+	 * @return {string} The WGSL snippet.
+	 */
+	generateTextureSampleLevel( texture, textureProperty, uvSnippet, levelSnippet, depthSnippet ) {
+
+		if ( this.isUnfilterable( texture ) === false ) {
+
+			return `textureSampleLevel( ${ textureProperty }, ${ textureProperty }_sampler, ${ uvSnippet }, ${ levelSnippet } )`;
+
+		} else if ( this.isFilteredTexture( texture ) ) {
+
+			return this.generateFilteredTexture( texture, textureProperty, uvSnippet, levelSnippet );
+
+		} else {
+
+			return this.generateTextureLod( texture, textureProperty, uvSnippet, depthSnippet, levelSnippet );
+
+		}
+
+	}
+
+	/**
+	 * Generates a wrap function used in context of textures.
+	 *
+	 * @param {Texture} texture - The texture to generate the function for.
+	 * @return {string} The name of the generated function.
+	 */
+	generateWrapFunction( texture ) {
+
+		const functionName = `tsl_coord_${ wrapNames[ texture.wrapS ] }S_${ wrapNames[ texture.wrapT ] }_${ texture.isData3DTexture ? '3d' : '2d' }T`;
+
+		let nodeCode = wgslCodeCache[ functionName ];
+
+		if ( nodeCode === undefined ) {
+
+			const includes = [];
+
+			// For 3D textures, use vec3f; for texture arrays, keep vec2f since array index is separate
+			const coordType = texture.isData3DTexture ? 'vec3f' : 'vec2f';
+			let code = `fn ${ functionName }( coord : ${ coordType } ) -> ${ coordType } {\n\n\treturn ${ coordType }(\n`;
+
+			const addWrapSnippet = ( wrap, axis ) => {
+
+				if ( wrap === RepeatWrapping ) {
+
+					includes.push( wgslPolyfill.repeatWrapping_float );
+
+					code += `\t\ttsl_repeatWrapping_float( coord.${ axis } )`;
+
+				} else if ( wrap === ClampToEdgeWrapping ) {
+
+					includes.push( wgslPolyfill.clampWrapping_float );
+
+					code += `\t\ttsl_clampWrapping_float( coord.${ axis } )`;
+
+				} else if ( wrap === MirroredRepeatWrapping ) {
+
+					includes.push( wgslPolyfill.mirrorWrapping_float );
+
+					code += `\t\ttsl_mirrorWrapping_float( coord.${ axis } )`;
+
+				} else {
+
+					code += `\t\tcoord.${ axis }`;
+
+					console.warn( `WebGPURenderer: Unsupported texture wrap type "${ wrap }" for vertex shader.` );
+
+				}
+
+			};
+
+			addWrapSnippet( texture.wrapS, 'x' );
+
+			code += ',\n';
+
+			addWrapSnippet( texture.wrapT, 'y' );
+
+			if ( texture.isData3DTexture ) {
+
+				code += ',\n';
+				addWrapSnippet( texture.wrapR, 'z' );
+
+			}
+
+			code += '\n\t);\n\n}\n';
+
+			wgslCodeCache[ functionName ] = nodeCode = new CodeNode( code, includes );
+
+		}
+
+		nodeCode.build( this );
+
+		return functionName;
+
+	}
+
+	/**
+	 * Generates the array declaration string.
+	 *
+	 * @param {string} type - The type.
+	 * @param {?number} [count] - The count.
+	 * @return {string} The generated value as a shader string.
+	 */
+	generateArrayDeclaration( type, count ) {
+
+		return `array< ${ this.getType( type ) }, ${ count } >`;
+
+	}
+
+	/**
+	 * Generates a WGSL variable that holds the texture dimension of the given texture.
+	 * It also returns information about the number of layers (elements) of an arrayed
+	 * texture as well as the cube face count of cube textures.
+	 *
+	 * @param {Texture} texture - The texture to generate the function for.
+	 * @param {string} textureProperty - The name of the video texture uniform in the shader.
+	 * @param {string} levelSnippet - A WGSL snippet that represents the mip level, with level 0 containing a full size version of the texture.
+	 * @return {string} The name of the dimension variable.
+	 */
+	generateTextureDimension( texture, textureProperty, levelSnippet ) {
+
+		const textureData = this.getDataFromNode( texture, this.shaderStage, this.globalCache );
+
+		if ( textureData.dimensionsSnippet === undefined ) textureData.dimensionsSnippet = {};
+
+		let textureDimensionNode = textureData.dimensionsSnippet[ levelSnippet ];
+
+		if ( textureData.dimensionsSnippet[ levelSnippet ] === undefined ) {
+
+			let textureDimensionsParams;
+			let dimensionType;
+
+			const { primarySamples } = this.renderer.backend.utils.getTextureSampleData( texture );
+			const isMultisampled = primarySamples > 1;
+
+			if ( texture.isData3DTexture ) {
+
+				dimensionType = 'vec3<u32>';
+
+			} else {
+
+				// Regular 2D textures, depth textures, etc.
+				dimensionType = 'vec2<u32>';
+
+			}
+
+			// Build parameters string based on texture type and multisampling
+			if ( isMultisampled || texture.isStorageTexture ) {
+
+				textureDimensionsParams = textureProperty;
+
+			} else {
+
+				textureDimensionsParams = `${textureProperty}${levelSnippet ? `, u32( ${ levelSnippet } )` : ''}`;
+
+			}
+
+			textureDimensionNode = new VarNode( new ExpressionNode( `textureDimensions( ${ textureDimensionsParams } )`, dimensionType ) );
+
+			textureData.dimensionsSnippet[ levelSnippet ] = textureDimensionNode;
+
+			if ( texture.isArrayTexture || texture.isDataArrayTexture || texture.isData3DTexture ) {
+
+				textureData.arrayLayerCount = new VarNode(
+					new ExpressionNode(
+						`textureNumLayers(${textureProperty})`,
+						'u32'
+					)
+				);
+
+			}
+
+			// For cube textures, we know it's always 6 faces
+			if ( texture.isTextureCube ) {
+
+				textureData.cubeFaceCount = new VarNode(
+					new ExpressionNode( '6u', 'u32' )
+				);
+
+			}
+
+		}
+
+		return textureDimensionNode.build( this );
+
+	}

@@ -1,0 +1,220 @@
+	 * @param {string} textureProperty - The name of the texture uniform in the shader.
+	 * @param {string} uvSnippet - A WGSL snippet that represents texture coordinates used for sampling.
+	 * @param {?string} depthSnippet - A WGSL snippet that represents 0-based texture array index to sample.
+	 * @param {string} [levelSnippet='0u'] - A WGSL snippet that represents the mip level, with level 0 containing a full size version of the texture.
+	 * @return {string} The WGSL snippet.
+	 */
+	generateTextureLod( texture, textureProperty, uvSnippet, depthSnippet, levelSnippet = '0u' ) {
+
+		const wrapFunction = this.generateWrapFunction( texture );
+		const textureDimension = this.generateTextureDimension( texture, textureProperty, levelSnippet );
+
+		const vecType = texture.isData3DTexture ? 'vec3' : 'vec2';
+		const coordSnippet = `${ vecType }<u32>( ${ wrapFunction }( ${ uvSnippet } ) * ${ vecType }<f32>( ${ textureDimension } ) )`;
+
+		return this.generateTextureLoad( texture, textureProperty, coordSnippet, depthSnippet, levelSnippet );
+
+	}
+
+	/**
+	 * Generates the WGSL snippet that reads a single texel from a texture without sampling or filtering.
+	 *
+	 * @param {Texture} texture - The texture.
+	 * @param {string} textureProperty - The name of the texture uniform in the shader.
+	 * @param {string} uvIndexSnippet - A WGSL snippet that represents texture coordinates used for sampling.
+	 * @param {?string} depthSnippet - A WGSL snippet that represents 0-based texture array index to sample.
+	 * @param {string} [levelSnippet='0u'] - A WGSL snippet that represents the mip level, with level 0 containing a full size version of the texture.
+	 * @return {string} The WGSL snippet.
+	 */
+	generateTextureLoad( texture, textureProperty, uvIndexSnippet, depthSnippet, levelSnippet = '0u' ) {
+
+		let snippet;
+
+		if ( depthSnippet ) {
+
+			snippet = `textureLoad( ${ textureProperty }, ${ uvIndexSnippet }, ${ depthSnippet }, u32( ${ levelSnippet } ) )`;
+
+		} else {
+
+			snippet = `textureLoad( ${ textureProperty }, ${ uvIndexSnippet }, u32( ${ levelSnippet } ) )`;
+
+			if ( this.renderer.backend.compatibilityMode && texture.isDepthTexture ) {
+
+				snippet += '.x';
+
+			}
+
+		}
+
+		return snippet;
+
+	}
+
+	/**
+	 * Generates the WGSL snippet that writes a single texel to a texture.
+	 *
+	 * @param {Texture} texture - The texture.
+	 * @param {string} textureProperty - The name of the texture uniform in the shader.
+	 * @param {string} uvIndexSnippet - A WGSL snippet that represents texture coordinates used for sampling.
+	 * @param {?string} depthSnippet - A WGSL snippet that represents 0-based texture array index to sample.
+	 * @param {string} valueSnippet - A WGSL snippet that represent the new texel value.
+	 * @return {string} The WGSL snippet.
+	 */
+	generateTextureStore( texture, textureProperty, uvIndexSnippet, depthSnippet, valueSnippet ) {
+
+		let snippet;
+
+		if ( depthSnippet ) {
+
+			snippet = `textureStore( ${ textureProperty }, ${ uvIndexSnippet }, ${ depthSnippet }, ${ valueSnippet } )`;
+
+		} else {
+
+			snippet = `textureStore( ${ textureProperty }, ${ uvIndexSnippet }, ${ valueSnippet } )`;
+
+		}
+
+		return snippet;
+
+	}
+
+	/**
+	 * Returns `true` if the sampled values of the given texture should be compared against a reference value.
+	 *
+	 * @param {Texture} texture - The texture.
+	 * @return {boolean} Whether the sampled values of the given texture should be compared against a reference value or not.
+	 */
+	isSampleCompare( texture ) {
+
+		return texture.isDepthTexture === true && texture.compareFunction !== null;
+
+	}
+
+	/**
+	 * Returns `true` if the given texture is unfilterable.
+	 *
+	 * @param {Texture} texture - The texture.
+	 * @return {boolean} Whether the given texture is unfilterable or not.
+	 */
+	isUnfilterable( texture ) {
+
+		return this.getComponentTypeFromTexture( texture ) !== 'float' ||
+			( ! this.isAvailable( 'float32Filterable' ) && texture.isDataTexture === true && texture.type === FloatType ) ||
+			( this.isSampleCompare( texture ) === false && texture.minFilter === NearestFilter && texture.magFilter === NearestFilter ) ||
+			this.renderer.backend.utils.getTextureSampleData( texture ).primarySamples > 1;
+
+	}
+
+	/**
+	 * Generates the WGSL snippet for sampling/loading the given texture.
+	 *
+	 * @param {Texture} texture - The texture.
+	 * @param {string} textureProperty - The name of the texture uniform in the shader.
+	 * @param {string} uvSnippet - A WGSL snippet that represents texture coordinates used for sampling.
+	 * @param {?string} depthSnippet - A WGSL snippet that represents 0-based texture array index to sample.
+	 * @param {string} [shaderStage=this.shaderStage] - The shader stage this code snippet is generated for.
+	 * @return {string} The WGSL snippet.
+	 */
+	generateTexture( texture, textureProperty, uvSnippet, depthSnippet, shaderStage = this.shaderStage ) {
+
+		let snippet = null;
+
+		if ( this.isUnfilterable( texture ) ) {
+
+			snippet = this.generateTextureLod( texture, textureProperty, uvSnippet, depthSnippet, '0', shaderStage );
+
+		} else {
+
+			snippet = this._generateTextureSample( texture, textureProperty, uvSnippet, depthSnippet, shaderStage );
+
+		}
+
+		return snippet;
+
+	}
+
+	/**
+	 * Generates the WGSL snippet for sampling/loading the given texture using explicit gradients.
+	 *
+	 * @param {Texture} texture - The texture.
+	 * @param {string} textureProperty - The name of the texture uniform in the shader.
+	 * @param {string} uvSnippet - A WGSL snippet that represents texture coordinates used for sampling.
+	 * @param {Array<string>} gradSnippet - An array holding both gradient WGSL snippets.
+	 * @param {?string} depthSnippet - A WGSL snippet that represents 0-based texture array index to sample.
+	 * @param {string} [shaderStage=this.shaderStage] - The shader stage this code snippet is generated for.
+	 * @return {string} The WGSL snippet.
+	 */
+	generateTextureGrad( texture, textureProperty, uvSnippet, gradSnippet, depthSnippet, shaderStage = this.shaderStage ) {
+
+		if ( shaderStage === 'fragment' ) {
+
+			// TODO handle i32 or u32 --> uvSnippet, array_index: A, ddx, ddy
+			return `textureSampleGrad( ${ textureProperty }, ${ textureProperty }_sampler, ${ uvSnippet },  ${ gradSnippet[ 0 ] }, ${ gradSnippet[ 1 ] } )`;
+
+		} else {
+
+			console.error( `WebGPURenderer: THREE.TextureNode.gradient() does not support ${ shaderStage } shader.` );
+
+		}
+
+	}
+
+	/**
+	 * Generates the WGSL snippet for sampling a depth texture and comparing the sampled depth values
+	 * against a reference value.
+	 *
+	 * @param {Texture} texture - The texture.
+	 * @param {string} textureProperty - The name of the texture uniform in the shader.
+	 * @param {string} uvSnippet - A WGSL snippet that represents texture coordinates used for sampling.
+	 * @param {string} compareSnippet -  A WGSL snippet that represents the reference value.
+	 * @param {?string} depthSnippet - A WGSL snippet that represents 0-based texture array index to sample.
+	 * @param {string} [shaderStage=this.shaderStage] - The shader stage this code snippet is generated for.
+	 * @return {string} The WGSL snippet.
+	 */
+	generateTextureCompare( texture, textureProperty, uvSnippet, compareSnippet, depthSnippet, shaderStage = this.shaderStage ) {
+
+		if ( shaderStage === 'fragment' ) {
+
+			if ( texture.isDepthTexture === true && texture.isArrayTexture === true ) {
+
+				return `textureSampleCompare( ${ textureProperty }, ${ textureProperty }_sampler, ${ uvSnippet }, ${ depthSnippet }, ${ compareSnippet } )`;
+
+			}
+
+			return `textureSampleCompare( ${ textureProperty }, ${ textureProperty }_sampler, ${ uvSnippet }, ${ compareSnippet } )`;
+
+		} else {
+
+			console.error( `WebGPURenderer: THREE.DepthTexture.compareFunction() does not support ${ shaderStage } shader.` );
+
+		}
+
+	}
+
+	/**
+	 * Generates the WGSL snippet when sampling textures with explicit mip level.
+	 *
+	 * @param {Texture} texture - The texture.
+	 * @param {string} textureProperty - The name of the texture uniform in the shader.
+	 * @param {string} uvSnippet - A WGSL snippet that represents texture coordinates used for sampling.
+	 * @param {string} levelSnippet - A WGSL snippet that represents the mip level, with level 0 containing a full size version of the texture.
+	 * @param {?string} depthSnippet - A WGSL snippet that represents 0-based texture array index to sample.
+	 * @param {string} [shaderStage=this.shaderStage] - The shader stage this code snippet is generated for.
+	 * @return {string} The WGSL snippet.
+	 */
+	generateTextureLevel( texture, textureProperty, uvSnippet, levelSnippet, depthSnippet ) {
+
+		if ( this.isUnfilterable( texture ) === false ) {
+
+			return `textureSampleLevel( ${ textureProperty }, ${ textureProperty }_sampler, ${ uvSnippet }, ${ levelSnippet } )`;
+
+		} else if ( this.isFilteredTexture( texture ) ) {
+
+			return this.generateFilteredTexture( texture, textureProperty, uvSnippet, levelSnippet );
+
+		} else {
+
+			return this.generateTextureLod( texture, textureProperty, uvSnippet, depthSnippet, levelSnippet );
+
+		}
+

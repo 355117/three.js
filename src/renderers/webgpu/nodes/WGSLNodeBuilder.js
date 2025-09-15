@@ -1,96 +1,96 @@
-import NodeUniformsGroup from '../../common/nodes/NodeUniformsGroup.js';
+import NodeUniformsGroup from '../../common/nodes/NodeUniformsGroup.js'; // 引入：节点统一变量组（UBO 管理）
 
-import NodeSampler from '../../common/nodes/NodeSampler.js';
-import { NodeSampledTexture, NodeSampledCubeTexture, NodeSampledTexture3D } from '../../common/nodes/NodeSampledTexture.js';
+import NodeSampler from '../../common/nodes/NodeSampler.js'; // 引入：采样器节点封装
+import { NodeSampledTexture, NodeSampledCubeTexture, NodeSampledTexture3D } from '../../common/nodes/NodeSampledTexture.js'; // 引入：采样纹理节点类型（2D/立方体/3D）
 
-import NodeUniformBuffer from '../../common/nodes/NodeUniformBuffer.js';
-import NodeStorageBuffer from '../../common/nodes/NodeStorageBuffer.js';
+import NodeUniformBuffer from '../../common/nodes/NodeUniformBuffer.js'; // 引入：Uniform 缓冲区节点
+import NodeStorageBuffer from '../../common/nodes/NodeStorageBuffer.js'; // 引入：Storage 缓冲区节点
 
-import { NodeBuilder, CodeNode } from '../../../nodes/Nodes.js';
+import { NodeBuilder, CodeNode } from '../../../nodes/Nodes.js'; // 引入：节点构建器与内联代码节点
 
-import { getFormat } from '../utils/WebGPUTextureUtils.js';
+import { getFormat } from '../utils/WebGPUTextureUtils.js'; // 引入：纹理格式工具函数
 
-import WGSLNodeParser from './WGSLNodeParser.js';
-import { NodeAccess } from '../../../nodes/core/constants.js';
+import WGSLNodeParser from './WGSLNodeParser.js'; // 引入：WGSL 节点解析器
+import { NodeAccess } from '../../../nodes/core/constants.js'; // 引入：节点访问枚举（只读/只写/读写）
 
-import VarNode from '../../../nodes/core/VarNode.js';
-import ExpressionNode from '../../../nodes/code/ExpressionNode.js';
+import VarNode from '../../../nodes/core/VarNode.js'; // 引入：变量节点
+import ExpressionNode from '../../../nodes/code/ExpressionNode.js'; // 引入：表达式节点
 
-import { FloatType, RepeatWrapping, ClampToEdgeWrapping, MirroredRepeatWrapping, NearestFilter } from '../../../constants.js';
+import { FloatType, RepeatWrapping, ClampToEdgeWrapping, MirroredRepeatWrapping, NearestFilter } from '../../../constants.js'; // 引入：常量（类型、环绕与过滤）
 
-// GPUShaderStage is not defined in browsers not supporting WebGPU
-const GPUShaderStage = ( typeof self !== 'undefined' ) ? self.GPUShaderStage : { VERTEX: 1, FRAGMENT: 2, COMPUTE: 4 };
+// GPUShaderStage is not defined in browsers not supporting WebGPU // 注：部分环境无 GPUShaderStage
+const GPUShaderStage = ( typeof self !== 'undefined' ) ? self.GPUShaderStage : { VERTEX: 1, FRAGMENT: 2, COMPUTE: 4 }; // 兼容定义 GPU 着色器阶段常量
 
-const accessNames = {
-	[ NodeAccess.READ_ONLY ]: 'read',
-	[ NodeAccess.WRITE_ONLY ]: 'write',
-	[ NodeAccess.READ_WRITE ]: 'read_write'
-};
+const accessNames = { // 访问模式到 WGSL 修饰符的映射
+	[ NodeAccess.READ_ONLY ]: 'read', // 只读 -> read
+	[ NodeAccess.WRITE_ONLY ]: 'write', // 只写 -> write
+	[ NodeAccess.READ_WRITE ]: 'read_write' // 读写 -> read_write
+}; // 结束 accessNames 定义
 
-const wrapNames = {
-	[ RepeatWrapping ]: 'repeat',
-	[ ClampToEdgeWrapping ]: 'clamp',
-	[ MirroredRepeatWrapping ]: 'mirror'
-};
+const wrapNames = { // 纹理环绕模式到代码片段名的映射
+	[ RepeatWrapping ]: 'repeat', // 平铺重复
+	[ ClampToEdgeWrapping ]: 'clamp', // 边缘钳制
+	[ MirroredRepeatWrapping ]: 'mirror' // 镜像重复
+}; // 结束 wrapNames 定义
 
-const gpuShaderStageLib = {
-	'vertex': GPUShaderStage ? GPUShaderStage.VERTEX : 1,
-	'fragment': GPUShaderStage ? GPUShaderStage.FRAGMENT : 2,
-	'compute': GPUShaderStage ? GPUShaderStage.COMPUTE : 4
-};
+const gpuShaderStageLib = { // 阶段名到阶段位掩码映射（含回退值）
+	'vertex': GPUShaderStage ? GPUShaderStage.VERTEX : 1, // 顶点阶段
+	'fragment': GPUShaderStage ? GPUShaderStage.FRAGMENT : 2, // 片元阶段
+	'compute': GPUShaderStage ? GPUShaderStage.COMPUTE : 4 // 计算阶段
+}; // 结束 gpuShaderStageLib 定义
 
-const supports = {
-	instance: true,
-	swizzleAssign: false,
-	storageBuffer: true
-};
+const supports = { // 特性支持表（WGSL 后端）
+	instance: true, // 支持实例化
+	swizzleAssign: false, // 不支持带重排写入
+	storageBuffer: true // 支持存储缓冲
+}; // 结束 supports 定义
 
-const wgslFnOpLib = {
-	'^^': 'tsl_xor'
-};
+const wgslFnOpLib = { // 运算符到 polyfill 函数名映射
+	'^^': 'tsl_xor' // 异或（布尔）映射为 tsl_xor
+}; // 结束 wgslFnOpLib 定义
 
-const wgslTypeLib = {
-	float: 'f32',
-	int: 'i32',
-	uint: 'u32',
-	bool: 'bool',
-	color: 'vec3<f32>',
+const wgslTypeLib = { // 内部类型到 WGSL 类型的映射
+	float: 'f32', // 浮点
+	int: 'i32', // 有符号整数
+	uint: 'u32', // 无符号整数
+	bool: 'bool', // 布尔
+	color: 'vec3<f32>', // 颜色（vec3f）
 
-	vec2: 'vec2<f32>',
-	ivec2: 'vec2<i32>',
-	uvec2: 'vec2<u32>',
-	bvec2: 'vec2<bool>',
+	vec2: 'vec2<f32>', // 浮点二维向量
+	ivec2: 'vec2<i32>', // 整型二维向量
+	uvec2: 'vec2<u32>', // 无符号二维向量
+	bvec2: 'vec2<bool>', // 布尔二维向量
 
-	vec3: 'vec3<f32>',
-	ivec3: 'vec3<i32>',
-	uvec3: 'vec3<u32>',
-	bvec3: 'vec3<bool>',
+	vec3: 'vec3<f32>', // 浮点三维向量
+	ivec3: 'vec3<i32>', // 整型三维向量
+	uvec3: 'vec3<u32>', // 无符号三维向量
+	bvec3: 'vec3<bool>', // 布尔三维向量
 
-	vec4: 'vec4<f32>',
-	ivec4: 'vec4<i32>',
-	uvec4: 'vec4<u32>',
-	bvec4: 'vec4<bool>',
+	vec4: 'vec4<f32>', // 浮点四维向量
+	ivec4: 'vec4<i32>', // 整型四维向量
+	uvec4: 'vec4<u32>', // 无符号四维向量
+	bvec4: 'vec4<bool>', // 布尔四维向量
 
-	mat2: 'mat2x2<f32>',
-	mat3: 'mat3x3<f32>',
-	mat4: 'mat4x4<f32>'
-};
+	mat2: 'mat2x2<f32>', // 2x2 矩阵
+	mat3: 'mat3x3<f32>', // 3x3 矩阵
+	mat4: 'mat4x4<f32>' // 4x4 矩阵
+}; // 结束 wgslTypeLib 定义
 
-const wgslCodeCache = {};
+const wgslCodeCache = {}; // 缓存已生成的 WGSL 代码片段（避免重复构建）
 
-const wgslPolyfill = {
-	tsl_xor: new CodeNode( 'fn tsl_xor( a : bool, b : bool ) -> bool { return ( a || b ) && !( a && b ); }' ),
-	mod_float: new CodeNode( 'fn tsl_mod_float( x : f32, y : f32 ) -> f32 { return x - y * floor( x / y ); }' ),
-	mod_vec2: new CodeNode( 'fn tsl_mod_vec2( x : vec2f, y : vec2f ) -> vec2f { return x - y * floor( x / y ); }' ),
-	mod_vec3: new CodeNode( 'fn tsl_mod_vec3( x : vec3f, y : vec3f ) -> vec3f { return x - y * floor( x / y ); }' ),
-	mod_vec4: new CodeNode( 'fn tsl_mod_vec4( x : vec4f, y : vec4f ) -> vec4f { return x - y * floor( x / y ); }' ),
-	equals_bool: new CodeNode( 'fn tsl_equals_bool( a : bool, b : bool ) -> bool { return a == b; }' ),
-	equals_bvec2: new CodeNode( 'fn tsl_equals_bvec2( a : vec2f, b : vec2f ) -> vec2<bool> { return vec2<bool>( a.x == b.x, a.y == b.y ); }' ),
-	equals_bvec3: new CodeNode( 'fn tsl_equals_bvec3( a : vec3f, b : vec3f ) -> vec3<bool> { return vec3<bool>( a.x == b.x, a.y == b.y, a.z == b.z ); }' ),
-	equals_bvec4: new CodeNode( 'fn tsl_equals_bvec4( a : vec4f, b : vec4f ) -> vec4<bool> { return vec4<bool>( a.x == b.x, a.y == b.y, a.z == b.z, a.w == b.w ); }' ),
-	repeatWrapping_float: new CodeNode( 'fn tsl_repeatWrapping_float( coord: f32 ) -> f32 { return fract( coord ); }' ),
-	mirrorWrapping_float: new CodeNode( 'fn tsl_mirrorWrapping_float( coord: f32 ) -> f32 { let mirrored = fract( coord * 0.5 ) * 2.0; return 1.0 - abs( 1.0 - mirrored ); }' ),
-	clampWrapping_float: new CodeNode( 'fn tsl_clampWrapping_float( coord: f32 ) -> f32 { return clamp( coord, 0.0, 1.0 ); }' ),
+const wgslPolyfill = { // 提供在 WGSL 中缺失或不一致的函数实现
+	tsl_xor: new CodeNode( 'fn tsl_xor( a : bool, b : bool ) -> bool { return ( a || b ) && !( a && b ); }' ), // 布尔异或
+	mod_float: new CodeNode( 'fn tsl_mod_float( x : f32, y : f32 ) -> f32 { return x - y * floor( x / y ); }' ), // 浮点取模
+	mod_vec2: new CodeNode( 'fn tsl_mod_vec2( x : vec2f, y : vec2f ) -> vec2f { return x - y * floor( x / y ); }' ), // vec2 取模
+	mod_vec3: new CodeNode( 'fn tsl_mod_vec3( x : vec3f, y : vec3f ) -> vec3f { return x - y * floor( x / y ); }' ), // vec3 取模
+	mod_vec4: new CodeNode( 'fn tsl_mod_vec4( x : vec4f, y : vec4f ) -> vec4f { return x - y * floor( x / y ); }' ), // vec4 取模
+	equals_bool: new CodeNode( 'fn tsl_equals_bool( a : bool, b : bool ) -> bool { return a == b; }' ), // bool 等值比较
+	equals_bvec2: new CodeNode( 'fn tsl_equals_bvec2( a : vec2f, b : vec2f ) -> vec2<bool> { return vec2<bool>( a.x == b.x, a.y == b.y ); }' ), // bvec2 等值比较
+	equals_bvec3: new CodeNode( 'fn tsl_equals_bvec3( a : vec3f, b : vec3f ) -> vec3<bool> { return vec3<bool>( a.x == b.x, a.y == b.y, a.z == b.z ); }' ), // bvec3 等值比较
+	equals_bvec4: new CodeNode( 'fn tsl_equals_bvec4( a : vec4f, b : vec4f ) -> vec4<bool> { return vec4<bool>( a.x == b.x, a.y == b.y, a.z == b.z, a.w == b.w ); }' ), // bvec4 等值比较
+	repeatWrapping_float: new CodeNode( 'fn tsl_repeatWrapping_float( coord: f32 ) -> f32 { return fract( coord ); }' ), // 重复环绕（单通道）
+	mirrorWrapping_float: new CodeNode( 'fn tsl_mirrorWrapping_float( coord: f32 ) -> f32 { let mirrored = fract( coord * 0.5 ) * 2.0; return 1.0 - abs( 1.0 - mirrored ); }' ), // 镜像环绕
+	clampWrapping_float: new CodeNode( 'fn tsl_clampWrapping_float( coord: f32 ) -> f32 { return clamp( coord, 0.0, 1.0 ); }' ), // 边缘钳制环绕
 	biquadraticTexture: new CodeNode( /* wgsl */`
 fn tsl_biquadraticTexture( map : texture_2d<f32>, coord : vec2f, iRes : vec2u, level : u32 ) -> vec4f {
 
@@ -113,71 +113,69 @@ fn tsl_biquadraticTexture( map : texture_2d<f32>, coord : vec2f, iRes : vec2u, l
 	return mix( mix( rg1, rg2, f.x ), mix( rg3, rg4, f.x ), f.y );
 
 }
-` )
-};
+` ) // 双二次纹理采样（字符串内为 WGSL，不做 JS 注释）
+}; // 结束 wgslPolyfill 定义
 
-const wgslMethods = {
-	dFdx: 'dpdx',
-	dFdy: '- dpdy',
-	mod_float: 'tsl_mod_float',
-	mod_vec2: 'tsl_mod_vec2',
-	mod_vec3: 'tsl_mod_vec3',
-	mod_vec4: 'tsl_mod_vec4',
-	equals_bool: 'tsl_equals_bool',
-	equals_bvec2: 'tsl_equals_bvec2',
-	equals_bvec3: 'tsl_equals_bvec3',
-	equals_bvec4: 'tsl_equals_bvec4',
-	inversesqrt: 'inverseSqrt',
-	bitcast: 'bitcast<f32>'
-};
+const wgslMethods = { // 将通用方法名映射到 WGSL/Polyfill 实现
+	dFdx: 'dpdx', // x 方向导数
+	dFdy: '- dpdy', // y 方向导数（WebGPU 取负以匹配期望）
+	mod_float: 'tsl_mod_float', // 浮点 mod
+	mod_vec2: 'tsl_mod_vec2', // vec2 mod
+	mod_vec3: 'tsl_mod_vec3', // vec3 mod
+	mod_vec4: 'tsl_mod_vec4', // vec4 mod
+	equals_bool: 'tsl_equals_bool', // bool 等值
+	equals_bvec2: 'tsl_equals_bvec2', // bvec2 等值
+	equals_bvec3: 'tsl_equals_bvec3', // bvec3 等值
+	equals_bvec4: 'tsl_equals_bvec4', // bvec4 等值
+	inversesqrt: 'inverseSqrt', // 逆平方根
+	bitcast: 'bitcast<f32>' // 位重解释为 f32
+}; // 结束 wgslMethods 定义
 
-// WebGPU issue: does not support pow() with negative base on Windows
+// WebGPU issue: does not support pow() with negative base on Windows // Windows 平台 pow(负底数, 指数) 不被支持
 
-if ( typeof navigator !== 'undefined' && /Windows/g.test( navigator.userAgent ) ) {
+if ( typeof navigator !== 'undefined' && /Windows/g.test( navigator.userAgent ) ) { // 检测 Windows 环境，启用 pow polyfill
 
-	wgslPolyfill.pow_float = new CodeNode( 'fn tsl_pow_float( a : f32, b : f32 ) -> f32 { return select( -pow( -a, b ), pow( a, b ), a > 0.0 ); }' );
-	wgslPolyfill.pow_vec2 = new CodeNode( 'fn tsl_pow_vec2( a : vec2f, b : vec2f ) -> vec2f { return vec2f( tsl_pow_float( a.x, b.x ), tsl_pow_float( a.y, b.y ) ); }', [ wgslPolyfill.pow_float ] );
-	wgslPolyfill.pow_vec3 = new CodeNode( 'fn tsl_pow_vec3( a : vec3f, b : vec3f ) -> vec3f { return vec3f( tsl_pow_float( a.x, b.x ), tsl_pow_float( a.y, b.y ), tsl_pow_float( a.z, b.z ) ); }', [ wgslPolyfill.pow_float ] );
-	wgslPolyfill.pow_vec4 = new CodeNode( 'fn tsl_pow_vec4( a : vec4f, b : vec4f ) -> vec4f { return vec4f( tsl_pow_float( a.x, b.x ), tsl_pow_float( a.y, b.y ), tsl_pow_float( a.z, b.z ), tsl_pow_float( a.w, b.w ) ); }', [ wgslPolyfill.pow_float ] );
+	wgslPolyfill.pow_float = new CodeNode( 'fn tsl_pow_float( a : f32, b : f32 ) -> f32 { return select( -pow( -a, b ), pow( a, b ), a > 0.0 ); }' ); // 浮点 pow 兼容实现
+	wgslPolyfill.pow_vec2 = new CodeNode( 'fn tsl_pow_vec2( a : vec2f, b : vec2f ) -> vec2f { return vec2f( tsl_pow_float( a.x, b.x ), tsl_pow_float( a.y, b.y ) ); }', [ wgslPolyfill.pow_float ] ); // vec2 pow 复用标量实现
+	wgslPolyfill.pow_vec3 = new CodeNode( 'fn tsl_pow_vec3( a : vec3f, b : vec3f ) -> vec3f { return vec3f( tsl_pow_float( a.x, b.x ), tsl_pow_float( a.y, b.y ), tsl_pow_float( a.z, b.z ) ); }', [ wgslPolyfill.pow_float ] ); // vec3 pow 复用标量实现
+	wgslPolyfill.pow_vec4 = new CodeNode( 'fn tsl_pow_vec4( a : vec4f, b : vec4f ) -> vec4f { return vec4f( tsl_pow_float( a.x, b.x ), tsl_pow_float( a.y, b.y ), tsl_pow_float( a.z, b.z ), tsl_pow_float( a.w, b.w ) ); }', [ wgslPolyfill.pow_float ] ); // vec4 pow 复用标量实现
 
-	wgslMethods.pow_float = 'tsl_pow_float';
-	wgslMethods.pow_vec2 = 'tsl_pow_vec2';
-	wgslMethods.pow_vec3 = 'tsl_pow_vec3';
-	wgslMethods.pow_vec4 = 'tsl_pow_vec4';
+	wgslMethods.pow_float = 'tsl_pow_float'; // 覆盖映射：pow_float
+	wgslMethods.pow_vec2 = 'tsl_pow_vec2'; // 覆盖映射：pow_vec2
+	wgslMethods.pow_vec3 = 'tsl_pow_vec3'; // 覆盖映射：pow_vec3
+	wgslMethods.pow_vec4 = 'tsl_pow_vec4'; // 覆盖映射：pow_vec4
 
-}
+} // 结束 Windows 兼容分支
 
-//
+// 分隔线 //
 
-let diagnostics = '';
+let diagnostics = ''; // 诊断指令字符串（用于编译器提示控制）
 
-if ( ( typeof navigator !== 'undefined' && /Firefox|Deno/g.test( navigator.userAgent ) ) !== true ) {
+if ( ( typeof navigator !== 'undefined' && /Firefox|Deno/g.test( navigator.userAgent ) ) !== true ) { // 非 Firefox/Deno 环境追加诊断禁用
 
-	diagnostics += 'diagnostic( off, derivative_uniformity );\n';
+	diagnostics += 'diagnostic( off, derivative_uniformity );\n'; // 关闭导数一致性诊断
 
-}
+} // 结束诊断环境判断
 
 /**
- * A node builder targeting WGSL.
+ * 面向 WGSL 的节点构建器。
  *
- * This module generates WGSL shader code from node materials and also
- * generates the respective bindings and vertex buffer definitions. These
- * data are later used by the renderer to create render and compute pipelines
- * for render objects.
+ * 本模块从节点材质生成 WGSL 着色器代码，并生成对应的绑定与顶点缓冲区
+ * 定义。这些数据随后被渲染器用于为渲染对象创建渲染与计算管线。
  *
  * @augments NodeBuilder
  */
-class WGSLNodeBuilder extends NodeBuilder {
+class WGSLNodeBuilder extends NodeBuilder { // WGSL 目标的节点构建器
 
 	/**
-	 * Constructs a new WGSL node builder renderer.
+	 * 构造 WGSL 节点构建器实例。
 	 *
-	 * @param {Object3D} object - The 3D object.
-	 * @param {Renderer} renderer - The renderer.
+	 * @param {Object3D} object - 三维对象。
+	 * @param {Renderer} renderer - 渲染器。
 	 */
-	constructor( object, renderer ) {
+	constructor( object, renderer ) { // 构造函数：接收渲染对象与渲染器
 
-		super( object, renderer, new WGSLNodeParser() );
+		super( object, renderer, new WGSLNodeParser() ); // 调用父类并指定 WGSL 解析器
 
 		/**
 		 * A dictionary that holds for each shader stage ('vertex', 'fragment', 'compute')
@@ -185,21 +183,21 @@ class WGSLNodeBuilder extends NodeBuilder {
 		 *
 		 * @type {Object<string,Object<string,NodeUniformsGroup>>}
 		 */
-		this.uniformGroups = {};
+		this.uniformGroups = {}; // 各着色阶段的 UBO 组字典（render/frame/object）
 
 		/**
 		 * A dictionary that holds for each shader stage a Map of builtins.
 		 *
 		 * @type {Object<string,Map<string,Object>>}
 		 */
-		this.builtins = {};
+		this.builtins = {}; // 各着色阶段的内建变量映射
 
 		/**
 		 * A dictionary that holds for each shader stage a Set of directives.
 		 *
 		 * @type {Object<string,Set<string>>}
 		 */
-		this.directives = {};
+		this.directives = {}; // 各着色阶段的编译指令集合
 
 		/**
 		 * A map for managing scope arrays. Only relevant for when using
@@ -207,237 +205,236 @@ class WGSLNodeBuilder extends NodeBuilder {
 		 *
 		 * @type {Map<string,Object>}
 		 */
-		this.scopedArrays = new Map();
+		this.scopedArrays = new Map(); // 作用域数组（计算着色器 WorkgroupInfoNode 使用）
 
-	}
+	} // 结束构造函数
 
 	/**
-	 * Generates the WGSL snippet for sampled textures.
+	 * 生成用于采样纹理的 WGSL 代码片段。
 	 *
 	 * @private
-	 * @param {Texture} texture - The texture.
-	 * @param {string} textureProperty - The name of the texture uniform in the shader.
-	 * @param {string} uvSnippet - A WGSL snippet that represents texture coordinates used for sampling.
-	 * @param {?string} depthSnippet - A WGSL snippet that represents 0-based texture array index to sample.
-	 * @param {string} [shaderStage=this.shaderStage] - The shader stage this code snippet is generated for.
-	 * @return {string} The WGSL snippet.
+	 * @param {Texture} texture - 纹理对象。
+	 * @param {string} textureProperty - 着色器中该纹理的 uniform 名称。
+	 * @param {string} uvSnippet - 表示用于采样的纹理坐标的 WGSL 片段。
+	 * @param {?string} depthSnippet - 表示 0 基的纹理数组层索引的 WGSL 片段。
+	 * @param {string} [shaderStage=this.shaderStage] - 生成该片段对应的着色阶段。
+	 * @return {string} 生成的 WGSL 片段。
 	 */
-	_generateTextureSample( texture, textureProperty, uvSnippet, depthSnippet, shaderStage = this.shaderStage ) {
+	_generateTextureSample( texture, textureProperty, uvSnippet, depthSnippet, shaderStage = this.shaderStage ) { // 为采样纹理生成 WGSL 片段
 
-		if ( shaderStage === 'fragment' ) {
+		if ( shaderStage === 'fragment' ) { // 片元阶段可用 textureSample
 
-			if ( depthSnippet ) {
+			if ( depthSnippet ) { // 数组/立方体等带层索引的采样
 
-				return `textureSample( ${ textureProperty }, ${ textureProperty }_sampler, ${ uvSnippet }, ${ depthSnippet } )`;
+				return `textureSample( ${ textureProperty }, ${ textureProperty }_sampler, ${ uvSnippet }, ${ depthSnippet } )`; // 指定层索引采样
 
-			} else {
+			} else { // 普通二维采样
 
-				return `textureSample( ${ textureProperty }, ${ textureProperty }_sampler, ${ uvSnippet } )`;
+				return `textureSample( ${ textureProperty }, ${ textureProperty }_sampler, ${ uvSnippet } )`; // 常规采样
 
-			}
+			} // 结束是否带层索引分支
 
-		} else {
+		} else { // 非片元阶段（如顶点/计算），使用显式 LOD 0
 
-			return this.generateTextureSampleLevel( texture, textureProperty, uvSnippet, '0', depthSnippet );
+			return this.generateTextureSampleLevel( texture, textureProperty, uvSnippet, '0', depthSnippet ); // LOD 固定为 0
 
-		}
+		} // 结束阶段判断
 
-	}
+	} // 结束 _generateTextureSample 方法
 
 	/**
-	 * Generates the WGSL snippet when sampling textures with explicit mip level.
+	 * 当使用显式 mip 等级采样纹理时，生成对应的 WGSL 片段。
 	 *
 	 * @private
-	 * @param {Texture} texture - The texture.
-	 * @param {string} textureProperty - The name of the texture uniform in the shader.
-	 * @param {string} uvSnippet - A WGSL snippet that represents texture coordinates used for sampling.
-	 * @param {string} levelSnippet - A WGSL snippet that represents the mip level, with level 0 containing a full size version of the texture.
-	 * @param {string} depthSnippet - A WGSL snippet that represents 0-based texture array index to sample.
-	 * @return {string} The WGSL snippet.
+	 * @param {Texture} texture - 纹理对象。
+	 * @param {string} textureProperty - 着色器中该纹理的 uniform 名称。
+	 * @param {string} uvSnippet - 表示用于采样的纹理坐标的 WGSL 片段。
+	 * @param {string} levelSnippet - 表示 mip 等级（0 为完整尺寸）的 WGSL 片段。
+	 * @param {string} depthSnippet - 表示 0 基纹理数组层索引的 WGSL 片段。
+	 * @return {string} 生成的 WGSL 片段。
 	 */
-	generateTextureSampleLevel( texture, textureProperty, uvSnippet, levelSnippet, depthSnippet ) {
+	generateTextureSampleLevel( texture, textureProperty, uvSnippet, levelSnippet, depthSnippet ) { // 显式 mip 级别采样
 
-		if ( this.isUnfilterable( texture ) === false ) {
+		if ( this.isUnfilterable( texture ) === false ) { // 可过滤的常规纹理
 
-			return `textureSampleLevel( ${ textureProperty }, ${ textureProperty }_sampler, ${ uvSnippet }, ${ levelSnippet } )`;
+			return `textureSampleLevel( ${ textureProperty }, ${ textureProperty }_sampler, ${ uvSnippet }, ${ levelSnippet } )`; // 直接使用 textureSampleLevel
 
-		} else if ( this.isFilteredTexture( texture ) ) {
+		} else if ( this.isFilteredTexture( texture ) ) { // 需软件过滤的情形
 
-			return this.generateFilteredTexture( texture, textureProperty, uvSnippet, levelSnippet );
+			return this.generateFilteredTexture( texture, textureProperty, uvSnippet, levelSnippet ); // 生成过滤采样代码
 
-		} else {
+		} else { // 其他情况，回落至 textureLoad + LOD
 
-			return this.generateTextureLod( texture, textureProperty, uvSnippet, depthSnippet, levelSnippet );
+			return this.generateTextureLod( texture, textureProperty, uvSnippet, depthSnippet, levelSnippet ); // 使用显式 LOD 访问
 
-		}
+		} // 结束条件分支
 
-	}
+	} // 结束 generateTextureSampleLevel 方法
 
 	/**
-	 * Generates a wrap function used in context of textures.
+	 * 为纹理坐标生成环绕（wrap）函数。
 	 *
-	 * @param {Texture} texture - The texture to generate the function for.
-	 * @return {string} The name of the generated function.
+	 * @param {Texture} texture - 需要生成环绕函数的纹理。
+	 * @return {string} 生成函数的名称。
 	 */
-	generateWrapFunction( texture ) {
+	generateWrapFunction( texture ) { // 生成纹理坐标环绕函数（根据包裹模式）
 
-		const functionName = `tsl_coord_${ wrapNames[ texture.wrapS ] }S_${ wrapNames[ texture.wrapT ] }_${ texture.isData3DTexture ? '3d' : '2d' }T`;
+		const functionName = `tsl_coord_${ wrapNames[ texture.wrapS ] }S_${ wrapNames[ texture.wrapT ] }_${ texture.isData3DTexture ? '3d' : '2d' }T`; // 根据 S/T/R 模式命名
 
-		let nodeCode = wgslCodeCache[ functionName ];
+		let nodeCode = wgslCodeCache[ functionName ]; // 尝试从缓存获取
 
-		if ( nodeCode === undefined ) {
+		if ( nodeCode === undefined ) { // 未缓存则生成
 
-			const includes = [];
+			const includes = []; // 需要引入的辅助函数列表
 
-			// For 3D textures, use vec3f; for texture arrays, keep vec2f since array index is separate
-			const coordType = texture.isData3DTexture ? 'vec3f' : 'vec2f';
-			let code = `fn ${ functionName }( coord : ${ coordType } ) -> ${ coordType } {\n\n\treturn ${ coordType }(\n`;
+			// For 3D textures, use vec3f; for texture arrays, keep vec2f since array index is separate // 注：3D 用 vec3f，数组另算层索引
+			const coordType = texture.isData3DTexture ? 'vec3f' : 'vec2f'; // 坐标类型依据纹理维度
+			let code = `fn ${ functionName }( coord : ${ coordType } ) -> ${ coordType } {\n\n\treturn ${ coordType }(\n`; // 生成函数开头与返回构造
 
-			const addWrapSnippet = ( wrap, axis ) => {
+			const addWrapSnippet = ( wrap, axis ) => { // 根据包裹模式追加对应轴的代码片段
 
-				if ( wrap === RepeatWrapping ) {
+				if ( wrap === RepeatWrapping ) { // 重复模式
 
-					includes.push( wgslPolyfill.repeatWrapping_float );
+					includes.push( wgslPolyfill.repeatWrapping_float ); // 记录需要的函数
 
-					code += `\t\ttsl_repeatWrapping_float( coord.${ axis } )`;
+					code += `\t\ttsl_repeatWrapping_float( coord.${ axis } )`; // 添加重复环绕代码
 
-				} else if ( wrap === ClampToEdgeWrapping ) {
+				} else if ( wrap === ClampToEdgeWrapping ) { // 钳制模式
 
-					includes.push( wgslPolyfill.clampWrapping_float );
+					includes.push( wgslPolyfill.clampWrapping_float ); // 引入钳制函数
 
-					code += `\t\ttsl_clampWrapping_float( coord.${ axis } )`;
+					code += `\t\ttsl_clampWrapping_float( coord.${ axis } )`; // 添加钳制环绕代码
 
-				} else if ( wrap === MirroredRepeatWrapping ) {
+				} else if ( wrap === MirroredRepeatWrapping ) { // 镜像重复
 
-					includes.push( wgslPolyfill.mirrorWrapping_float );
+					includes.push( wgslPolyfill.mirrorWrapping_float ); // 引入镜像函数
 
-					code += `\t\ttsl_mirrorWrapping_float( coord.${ axis } )`;
+					code += `\t\ttsl_mirrorWrapping_float( coord.${ axis } )`; // 添加镜像环绕代码
 
-				} else {
+				} else { // 其他模式（不支持）
 
-					code += `\t\tcoord.${ axis }`;
+					code += `\t\tcoord.${ axis }`; // 直接传递坐标
 
-					console.warn( `WebGPURenderer: Unsupported texture wrap type "${ wrap }" for vertex shader.` );
+					console.warn( `WebGPURenderer: Unsupported texture wrap type "${ wrap }" for vertex shader.` ); // 警告：不支持的包裹模式
 
 				}
 
-			};
+			}; // 结束 addWrapSnippet 定义
 
-			addWrapSnippet( texture.wrapS, 'x' );
+			addWrapSnippet( texture.wrapS, 'x' ); // 处理 S 轴
 
-			code += ',\n';
+			code += ',\n'; // 在字符串中添加换行与分隔
 
-			addWrapSnippet( texture.wrapT, 'y' );
+			addWrapSnippet( texture.wrapT, 'y' ); // 处理 T 轴
 
-			if ( texture.isData3DTexture ) {
+			if ( texture.isData3DTexture ) { // 3D 纹理需处理 R 轴
 
-				code += ',\n';
-				addWrapSnippet( texture.wrapR, 'z' );
+				code += ',\n'; // 分隔第三个分量
+				addWrapSnippet( texture.wrapR, 'z' ); // 处理 R 轴
 
-			}
+			} // 结束 3D 判断
 
-			code += '\n\t);\n\n}\n';
+			code += '\n\t);\n\n}\n'; // 结束函数字符串
 
-			wgslCodeCache[ functionName ] = nodeCode = new CodeNode( code, includes );
+			wgslCodeCache[ functionName ] = nodeCode = new CodeNode( code, includes ); // 缓存生成的 CodeNode
 
-		}
+		} // 结束未缓存分支
 
-		nodeCode.build( this );
+		nodeCode.build( this ); // 确保依赖函数已构建
 
-		return functionName;
+		return functionName; // 返回生成的函数名
 
-	}
-
-	/**
-	 * Generates the array declaration string.
-	 *
-	 * @param {string} type - The type.
-	 * @param {?number} [count] - The count.
-	 * @return {string} The generated value as a shader string.
-	 */
-	generateArrayDeclaration( type, count ) {
-
-		return `array< ${ this.getType( type ) }, ${ count } >`;
-
-	}
+	} // 结束 generateWrapFunction 方法
 
 	/**
-	 * Generates a WGSL variable that holds the texture dimension of the given texture.
-	 * It also returns information about the number of layers (elements) of an arrayed
-	 * texture as well as the cube face count of cube textures.
+	 * 生成 WGSL 数组类型声明字符串。
 	 *
-	 * @param {Texture} texture - The texture to generate the function for.
-	 * @param {string} textureProperty - The name of the video texture uniform in the shader.
-	 * @param {string} levelSnippet - A WGSL snippet that represents the mip level, with level 0 containing a full size version of the texture.
-	 * @return {string} The name of the dimension variable.
+	 * @param {string} type - 元素类型。
+	 * @param {?number} [count] - 元素数量。
+	 * @return {string} 着色器中的数组类型字符串。
 	 */
-	generateTextureDimension( texture, textureProperty, levelSnippet ) {
+	generateArrayDeclaration( type, count ) { // 生成数组声明（WGSL 语法）
 
-		const textureData = this.getDataFromNode( texture, this.shaderStage, this.globalCache );
+		return `array< ${ this.getType( type ) }, ${ count } >`; // 例如 array< vec4f, N >
 
-		if ( textureData.dimensionsSnippet === undefined ) textureData.dimensionsSnippet = {};
+	} // 结束 generateArrayDeclaration 方法
 
-		let textureDimensionNode = textureData.dimensionsSnippet[ levelSnippet ];
+	/**
+	 * 生成一个 WGSL 变量以保存指定纹理的尺寸信息。
+	 * 同时返回纹理数组的层数信息以及立方体纹理的面数信息。
+	 *
+	 * @param {Texture} texture - 需要查询尺寸的纹理。
+	 * @param {string} textureProperty - 着色器中该纹理 uniform 的名称。
+	 * @param {string} levelSnippet - 表示 mip 等级（0 为完整尺寸）的 WGSL 片段。
+	 * @return {string} 尺寸变量的片段名称。
+	 */
+	generateTextureDimension( texture, textureProperty, levelSnippet ) { // 生成保存纹理尺寸的变量
 
-		if ( textureData.dimensionsSnippet[ levelSnippet ] === undefined ) {
+		const textureData = this.getDataFromNode( texture, this.shaderStage, this.globalCache ); // 获取/初始化纹理数据缓存
 
-			let textureDimensionsParams;
-			let dimensionType;
+		if ( textureData.dimensionsSnippet === undefined ) textureData.dimensionsSnippet = {}; // 准备不同 LOD 的尺寸片段缓存
 
-			const { primarySamples } = this.renderer.backend.utils.getTextureSampleData( texture );
-			const isMultisampled = primarySamples > 1;
+		let textureDimensionNode = textureData.dimensionsSnippet[ levelSnippet ]; // 获取当前 LOD 的尺寸节点
 
-			if ( texture.isData3DTexture ) {
+		if ( textureData.dimensionsSnippet[ levelSnippet ] === undefined ) { // 首次为该 LOD 构建
 
-				dimensionType = 'vec3<u32>';
+			let textureDimensionsParams; // textureDimensions 调用参数
+			let dimensionType; // 返回的尺寸类型（vec2<u32>/vec3<u32>）
 
-			} else {
+			const { primarySamples } = this.renderer.backend.utils.getTextureSampleData( texture ); // 读取采样数
+			const isMultisampled = primarySamples > 1; // 是否为多重采样纹理
 
-				// Regular 2D textures, depth textures, etc.
-				dimensionType = 'vec2<u32>';
+			if ( texture.isData3DTexture ) { // 3D 纹理返回三维尺寸
+
+				dimensionType = 'vec3<u32>'; // 三维尺寸类型
+
+			} else { // 常规 2D/深度纹理
+
+				// Regular 2D textures, depth textures, etc. // 普通二维、深度等返回二维尺寸
+				dimensionType = 'vec2<u32>'; // 二维尺寸类型
 
 			}
 
-			// Build parameters string based on texture type and multisampling
-			if ( isMultisampled || texture.isStorageTexture ) {
+			// Build parameters string based on texture type and multisampling // 根据纹理类型/多采样决定参数
+			if ( isMultisampled || texture.isStorageTexture ) { // MSAA 或存储纹理不需要 mip 级别
 
-				textureDimensionsParams = textureProperty;
+				textureDimensionsParams = textureProperty; // 直接传入纹理句柄
 
-			} else {
+			} else { // 常规纹理可附带 LOD
 
-				textureDimensionsParams = `${textureProperty}${levelSnippet ? `, u32( ${ levelSnippet } )` : ''}`;
+				textureDimensionsParams = `${textureProperty}${levelSnippet ? `, u32( ${ levelSnippet } )` : ''}`; // 选择性追加 LOD 参数
 
-			}
+			} // 结束参数选择
 
-			textureDimensionNode = new VarNode( new ExpressionNode( `textureDimensions( ${ textureDimensionsParams } )`, dimensionType ) );
+			textureDimensionNode = new VarNode( new ExpressionNode( `textureDimensions( ${ textureDimensionsParams } )`, dimensionType ) ); // 构建表达式并包裹为变量节点
 
-			textureData.dimensionsSnippet[ levelSnippet ] = textureDimensionNode;
+			textureData.dimensionsSnippet[ levelSnippet ] = textureDimensionNode; // 缓存当前 LOD 的尺寸节点
 
-			if ( texture.isArrayTexture || texture.isDataArrayTexture || texture.isData3DTexture ) {
+			if ( texture.isArrayTexture || texture.isDataArrayTexture || texture.isData3DTexture ) { // 数组/3D 纹理提供层数信息
 
-				textureData.arrayLayerCount = new VarNode(
+				textureData.arrayLayerCount = new VarNode( // 声明层数变量
 					new ExpressionNode(
-						`textureNumLayers(${textureProperty})`,
-						'u32'
+						`textureNumLayers(${textureProperty})`, // 取得数组层数
+						'u32' // 返回类型为 u32
 					)
 				);
 
-			}
+			} // 结束层数处理
 
-			// For cube textures, we know it's always 6 faces
-			if ( texture.isTextureCube ) {
+			// For cube textures, we know it's always 6 faces // 立方体纹理恒为 6 个面
+			if ( texture.isTextureCube ) { // 处理立方体面数
 
-				textureData.cubeFaceCount = new VarNode(
-					new ExpressionNode( '6u', 'u32' )
+				textureData.cubeFaceCount = new VarNode( // 固定常量 6
+					new ExpressionNode( '6u', 'u32' ) // 无符号常量 6
 				);
 
-			}
+			} // 结束立方体面数设置
 
-		}
+		} // 结束首次构建尺寸节点分支
 
-		return textureDimensionNode.build( this );
+		return textureDimensionNode.build( this ); // 返回已构建的尺寸变量片段
 
-	}
+	} // 结束 generateTextureDimension 方法
 
 	/**
 	 * Generates the WGSL snippet for a manual filtered texture.
@@ -460,15 +457,15 @@ class WGSLNodeBuilder extends NodeBuilder {
 	}
 
 	/**
-	 * Generates the WGSL snippet for a texture lookup with explicit level-of-detail.
-	 * Since it's a lookup, no sampling or filtering is applied.
+	 * 生成带显式细节级别（LOD）的纹理读取 WGSL 片段。
+	 * 注意该操作为直接读取（lookup），不进行采样或过滤。
 	 *
-	 * @param {Texture} texture - The texture.
-	 * @param {string} textureProperty - The name of the texture uniform in the shader.
-	 * @param {string} uvSnippet - A WGSL snippet that represents texture coordinates used for sampling.
-	 * @param {?string} depthSnippet - A WGSL snippet that represents 0-based texture array index to sample.
-	 * @param {string} [levelSnippet='0u'] - A WGSL snippet that represents the mip level, with level 0 containing a full size version of the texture.
-	 * @return {string} The WGSL snippet.
+	 * @param {Texture} texture - 纹理对象。
+	 * @param {string} textureProperty - 着色器中该纹理的 uniform 名称。
+	 * @param {string} uvSnippet - 表示用于采样的纹理坐标的 WGSL 片段。
+	 * @param {?string} depthSnippet - 表示 0 基纹理数组层索引的 WGSL 片段。
+	 * @param {string} [levelSnippet='0u'] - 表示 mip 等级（0 为完整尺寸）的 WGSL 片段。
+	 * @return {string} 生成的 WGSL 片段。
 	 */
 	generateTextureLod( texture, textureProperty, uvSnippet, depthSnippet, levelSnippet = '0u' ) {
 
@@ -483,14 +480,14 @@ class WGSLNodeBuilder extends NodeBuilder {
 	}
 
 	/**
-	 * Generates the WGSL snippet that reads a single texel from a texture without sampling or filtering.
+	 * 生成在不进行采样/过滤的情况下读取单个 texel 的 WGSL 片段。
 	 *
-	 * @param {Texture} texture - The texture.
-	 * @param {string} textureProperty - The name of the texture uniform in the shader.
-	 * @param {string} uvIndexSnippet - A WGSL snippet that represents texture coordinates used for sampling.
-	 * @param {?string} depthSnippet - A WGSL snippet that represents 0-based texture array index to sample.
-	 * @param {string} [levelSnippet='0u'] - A WGSL snippet that represents the mip level, with level 0 containing a full size version of the texture.
-	 * @return {string} The WGSL snippet.
+	 * @param {Texture} texture - 纹理对象。
+	 * @param {string} textureProperty - 着色器中该纹理的 uniform 名称。
+	 * @param {string} uvIndexSnippet - 表示用于读取的整数坐标/索引的 WGSL 片段。
+	 * @param {?string} depthSnippet - 表示 0 基纹理数组层索引的 WGSL 片段。
+	 * @param {string} [levelSnippet='0u'] - 表示 mip 等级（0 为完整尺寸）的 WGSL 片段。
+	 * @return {string} 生成的 WGSL 片段。
 	 */
 	generateTextureLoad( texture, textureProperty, uvIndexSnippet, depthSnippet, levelSnippet = '0u' ) {
 
@@ -517,14 +514,14 @@ class WGSLNodeBuilder extends NodeBuilder {
 	}
 
 	/**
-	 * Generates the WGSL snippet that writes a single texel to a texture.
+	 * 生成向纹理写入单个 texel 的 WGSL 片段。
 	 *
-	 * @param {Texture} texture - The texture.
-	 * @param {string} textureProperty - The name of the texture uniform in the shader.
-	 * @param {string} uvIndexSnippet - A WGSL snippet that represents texture coordinates used for sampling.
-	 * @param {?string} depthSnippet - A WGSL snippet that represents 0-based texture array index to sample.
-	 * @param {string} valueSnippet - A WGSL snippet that represent the new texel value.
-	 * @return {string} The WGSL snippet.
+	 * @param {Texture} texture - 纹理对象。
+	 * @param {string} textureProperty - 着色器中该纹理的 uniform 名称。
+	 * @param {string} uvIndexSnippet - 表示整数坐标/索引的 WGSL 片段。
+	 * @param {?string} depthSnippet - 表示 0 基纹理数组层索引的 WGSL 片段。
+	 * @param {string} valueSnippet - 表示新 texel 值的 WGSL 片段。
+	 * @return {string} 生成的 WGSL 片段。
 	 */
 	generateTextureStore( texture, textureProperty, uvIndexSnippet, depthSnippet, valueSnippet ) {
 
@@ -545,10 +542,10 @@ class WGSLNodeBuilder extends NodeBuilder {
 	}
 
 	/**
-	 * Returns `true` if the sampled values of the given texture should be compared against a reference value.
+	 * 若给定纹理的采样值需要与参考值比较，则返回 `true`。
 	 *
-	 * @param {Texture} texture - The texture.
-	 * @return {boolean} Whether the sampled values of the given texture should be compared against a reference value or not.
+	 * @param {Texture} texture - 纹理对象。
+	 * @return {boolean} 是否需要进行深度比较。
 	 */
 	isSampleCompare( texture ) {
 
@@ -557,10 +554,10 @@ class WGSLNodeBuilder extends NodeBuilder {
 	}
 
 	/**
-	 * Returns `true` if the given texture is unfilterable.
+	 * 判断给定纹理是否不可过滤（unfilterable）。
 	 *
-	 * @param {Texture} texture - The texture.
-	 * @return {boolean} Whether the given texture is unfilterable or not.
+	 * @param {Texture} texture - 纹理对象。
+	 * @return {boolean} 是否为不可过滤纹理。
 	 */
 	isUnfilterable( texture ) {
 
@@ -572,14 +569,14 @@ class WGSLNodeBuilder extends NodeBuilder {
 	}
 
 	/**
-	 * Generates the WGSL snippet for sampling/loading the given texture.
+	 * 生成采样/加载给定纹理的 WGSL 片段。
 	 *
-	 * @param {Texture} texture - The texture.
-	 * @param {string} textureProperty - The name of the texture uniform in the shader.
-	 * @param {string} uvSnippet - A WGSL snippet that represents texture coordinates used for sampling.
-	 * @param {?string} depthSnippet - A WGSL snippet that represents 0-based texture array index to sample.
-	 * @param {string} [shaderStage=this.shaderStage] - The shader stage this code snippet is generated for.
-	 * @return {string} The WGSL snippet.
+	 * @param {Texture} texture - 纹理对象。
+	 * @param {string} textureProperty - 着色器中该纹理的 uniform 名称。
+	 * @param {string} uvSnippet - 表示用于采样的纹理坐标的 WGSL 片段。
+	 * @param {?string} depthSnippet - 表示 0 基纹理数组层索引的 WGSL 片段。
+	 * @param {string} [shaderStage=this.shaderStage] - 生成该片段对应的着色阶段。
+	 * @return {string} 生成的 WGSL 片段。
 	 */
 	generateTexture( texture, textureProperty, uvSnippet, depthSnippet, shaderStage = this.shaderStage ) {
 
@@ -600,15 +597,15 @@ class WGSLNodeBuilder extends NodeBuilder {
 	}
 
 	/**
-	 * Generates the WGSL snippet for sampling/loading the given texture using explicit gradients.
+	 * 使用显式梯度（ddx/ddy）采样/加载纹理时生成 WGSL 片段。
 	 *
-	 * @param {Texture} texture - The texture.
-	 * @param {string} textureProperty - The name of the texture uniform in the shader.
-	 * @param {string} uvSnippet - A WGSL snippet that represents texture coordinates used for sampling.
-	 * @param {Array<string>} gradSnippet - An array holding both gradient WGSL snippets.
-	 * @param {?string} depthSnippet - A WGSL snippet that represents 0-based texture array index to sample.
-	 * @param {string} [shaderStage=this.shaderStage] - The shader stage this code snippet is generated for.
-	 * @return {string} The WGSL snippet.
+	 * @param {Texture} texture - 纹理对象。
+	 * @param {string} textureProperty - 着色器中该纹理的 uniform 名称。
+	 * @param {string} uvSnippet - 表示用于采样的纹理坐标的 WGSL 片段。
+	 * @param {Array<string>} gradSnippet - 保存两个梯度片段的数组（ddx, ddy）。
+	 * @param {?string} depthSnippet - 表示 0 基纹理数组层索引的 WGSL 片段。
+	 * @param {string} [shaderStage=this.shaderStage] - 生成该片段对应的着色阶段。
+	 * @return {string} 生成的 WGSL 片段。
 	 */
 	generateTextureGrad( texture, textureProperty, uvSnippet, gradSnippet, depthSnippet, shaderStage = this.shaderStage ) {
 
@@ -626,16 +623,15 @@ class WGSLNodeBuilder extends NodeBuilder {
 	}
 
 	/**
-	 * Generates the WGSL snippet for sampling a depth texture and comparing the sampled depth values
-	 * against a reference value.
+	 * 生成用于采样深度纹理并与参考值进行比较的 WGSL 片段。
 	 *
-	 * @param {Texture} texture - The texture.
-	 * @param {string} textureProperty - The name of the texture uniform in the shader.
-	 * @param {string} uvSnippet - A WGSL snippet that represents texture coordinates used for sampling.
-	 * @param {string} compareSnippet -  A WGSL snippet that represents the reference value.
-	 * @param {?string} depthSnippet - A WGSL snippet that represents 0-based texture array index to sample.
-	 * @param {string} [shaderStage=this.shaderStage] - The shader stage this code snippet is generated for.
-	 * @return {string} The WGSL snippet.
+	 * @param {Texture} texture - 深度纹理对象。
+	 * @param {string} textureProperty - 着色器中该纹理的 uniform 名称。
+	 * @param {string} uvSnippet - 表示用于采样的纹理坐标的 WGSL 片段。
+	 * @param {string} compareSnippet - 表示参考深度值的 WGSL 片段。
+	 * @param {?string} depthSnippet - 表示 0 基纹理数组层索引的 WGSL 片段。
+	 * @param {string} [shaderStage=this.shaderStage] - 生成该片段对应的着色阶段。
+	 * @return {string} 生成的 WGSL 片段。
 	 */
 	generateTextureCompare( texture, textureProperty, uvSnippet, compareSnippet, depthSnippet, shaderStage = this.shaderStage ) {
 
@@ -658,15 +654,15 @@ class WGSLNodeBuilder extends NodeBuilder {
 	}
 
 	/**
-	 * Generates the WGSL snippet when sampling textures with explicit mip level.
+	 * 在使用显式 mip 等级采样纹理时生成 WGSL 片段。
 	 *
-	 * @param {Texture} texture - The texture.
-	 * @param {string} textureProperty - The name of the texture uniform in the shader.
-	 * @param {string} uvSnippet - A WGSL snippet that represents texture coordinates used for sampling.
-	 * @param {string} levelSnippet - A WGSL snippet that represents the mip level, with level 0 containing a full size version of the texture.
-	 * @param {?string} depthSnippet - A WGSL snippet that represents 0-based texture array index to sample.
-	 * @param {string} [shaderStage=this.shaderStage] - The shader stage this code snippet is generated for.
-	 * @return {string} The WGSL snippet.
+	 * @param {Texture} texture - 纹理对象。
+	 * @param {string} textureProperty - 着色器中该纹理的 uniform 名称。
+	 * @param {string} uvSnippet - 表示用于采样的纹理坐标的 WGSL 片段。
+	 * @param {string} levelSnippet - 表示 mip 等级（0 为完整尺寸）的 WGSL 片段。
+	 * @param {?string} depthSnippet - 表示 0 基纹理数组层索引的 WGSL 片段。
+	 * @param {string} [shaderStage=this.shaderStage] - 生成该片段对应的着色阶段。
+	 * @return {string} 生成的 WGSL 片段。
 	 */
 	generateTextureLevel( texture, textureProperty, uvSnippet, levelSnippet, depthSnippet ) {
 
@@ -687,15 +683,15 @@ class WGSLNodeBuilder extends NodeBuilder {
 	}
 
 	/**
-	 * Generates the WGSL snippet when sampling textures with a bias to the mip level.
+	 * 以对 mip 等级添加偏置（bias）的方式进行采样时，生成 WGSL 片段。
 	 *
-	 * @param {Texture} texture - The texture.
-	 * @param {string} textureProperty - The name of the texture uniform in the shader.
-	 * @param {string} uvSnippet - A WGSL snippet that represents texture coordinates used for sampling.
-	 * @param {string} biasSnippet - A WGSL snippet that represents the bias to apply to the mip level before sampling.
-	 * @param {?string} depthSnippet - A WGSL snippet that represents 0-based texture array index to sample.
-	 * @param {string} [shaderStage=this.shaderStage] - The shader stage this code snippet is generated for.
-	 * @return {string} The WGSL snippet.
+	 * @param {Texture} texture - 纹理对象。
+	 * @param {string} textureProperty - 着色器中该纹理的 uniform 名称。
+	 * @param {string} uvSnippet - 表示用于采样的纹理坐标的 WGSL 片段。
+	 * @param {string} biasSnippet - 表示在采样前应用到 mip 等级的偏置值片段。
+	 * @param {?string} depthSnippet - 表示 0 基纹理数组层索引的 WGSL 片段。
+	 * @param {string} [shaderStage=this.shaderStage] - 生成该片段对应的着色阶段。
+	 * @return {string} 生成的 WGSL 片段。
 	 */
 	generateTextureBias( texture, textureProperty, uvSnippet, biasSnippet, depthSnippet, shaderStage = this.shaderStage ) {
 
@@ -712,11 +708,11 @@ class WGSLNodeBuilder extends NodeBuilder {
 	}
 
 	/**
-	 * Returns a WGSL snippet that represents the property name of the given node.
+	 * 返回表示给定节点属性名的 WGSL 片段。
 	 *
-	 * @param {Node} node - The node.
-	 * @param {string} [shaderStage=this.shaderStage] - The shader stage this code snippet is generated for.
-	 * @return {string} The property name.
+	 * @param {Node} node - 节点对象。
+	 * @param {string} [shaderStage=this.shaderStage] - 生成该片段对应的着色阶段。
+	 * @return {string} 属性名片段。
 	 */
 	getPropertyName( node, shaderStage = this.shaderStage ) {
 
@@ -760,9 +756,9 @@ class WGSLNodeBuilder extends NodeBuilder {
 	}
 
 	/**
-	 * Returns the output struct name.
+	 * 返回输出结构体的名称。
 	 *
-	 * @return {string} The name of the output struct.
+	 * @return {string} 输出结构体名称。
 	 */
 	getOutputStructName() {
 
@@ -771,10 +767,10 @@ class WGSLNodeBuilder extends NodeBuilder {
 	}
 
 	/**
-	 * Returns the native shader operator name for a given generic name.
+	 * 将通用运算名解析为底层着色器中的实际函数名。
 	 *
-	 * @param {string} op - The operator name to resolve.
-	 * @return {?string} The resolved operator name.
+	 * @param {string} op - 需要解析的运算符名称。
+	 * @return {?string} 解析后的函数名，若不存在则为 null。
 	 */
 	getFunctionOperator( op ) {
 
@@ -793,11 +789,11 @@ class WGSLNodeBuilder extends NodeBuilder {
 	}
 
 	/**
-	 * Returns the node access for the given node and shader stage.
+	 * 返回给定节点在指定着色阶段的访问权限字符串。
 	 *
-	 * @param {StorageTextureNode|StorageBufferNode} node - The storage node.
-	 * @param {string} shaderStage - The shader stage.
-	 * @return {string} The node access.
+	 * @param {StorageTextureNode|StorageBufferNode} node - 存储类节点。
+	 * @param {string} shaderStage - 着色阶段。
+	 * @return {string} 节点访问权限标识。
 	 */
 	getNodeAccess( node, shaderStage ) {
 

@@ -1,10 +1,10 @@
-import NodeFunction from '../../../nodes/core/NodeFunction.js';
-import NodeFunctionInput from '../../../nodes/core/NodeFunctionInput.js';
+import NodeFunction from '../../../nodes/core/NodeFunction.js'; // 引入通用节点函数基类
+import NodeFunctionInput from '../../../nodes/core/NodeFunctionInput.js'; // 引入节点函数输入描述类
 
-const declarationRegexp = /^[fn]*\s*([a-z_0-9]+)?\s*\(([\s\S]*?)\)\s*[\-\>]*\s*([a-z_0-9]+(?:<[\s\S]+?>)?)/i;
-const propertiesRegexp = /([a-z_0-9]+)\s*:\s*([a-z_0-9]+(?:<[\s\S]+?>)?)/ig;
+const declarationRegexp = /^[fn]*\s*([a-z_0-9]+)?\s*\(([\s\S]*?)\)\s*[\-\>]*\s*([a-z_0-9]+(?:<[\s\S]+?>)?)/i; // 匹配函数声明（名称、参数、返回类型）
+const propertiesRegexp = /([a-z_0-9]+)\s*:\s*([a-z_0-9]+(?:<[\s\S]+?>)?)/ig; // 匹配参数对（name: type）
 
-const wgslTypeLib = {
+const wgslTypeLib = { // WGSL 类型到内部节点类型的映射表
 	'f32': 'float',
 	'i32': 'int',
 	'u32': 'uint',
@@ -73,115 +73,115 @@ const wgslTypeLib = {
 	'texture_storage_2d_array': 'storageTexture',
 	'texture_storage_3d': 'storageTexture'
 
-};
+}; // 结束类型映射表定义
 
-const parse = ( source ) => {
+const parse = ( source ) => { // 解析 WGSL 函数字符串，提取类型、输入、名称与代码块
 
-	source = source.trim();
+	source = source.trim(); // 去除首尾空白
 
-	const declaration = source.match( declarationRegexp );
+	const declaration = source.match( declarationRegexp ); // 匹配函数声明部分
 
-	if ( declaration !== null && declaration.length === 4 ) {
+	if ( declaration !== null && declaration.length === 4 ) { // 成功匹配到（名称、参数、返回类型）三段
 
-		const inputsCode = declaration[ 2 ];
-		const propsMatches = [];
-		let match = null;
+		const inputsCode = declaration[ 2 ]; // 原始参数段字符串
+		const propsMatches = []; // 收集参数匹配结果
+		let match = null; // 临时匹配对象
 
-		while ( ( match = propertiesRegexp.exec( inputsCode ) ) !== null ) {
+		while ( ( match = propertiesRegexp.exec( inputsCode ) ) !== null ) { // 迭代提取 name/type 对
 
-			propsMatches.push( { name: match[ 1 ], type: match[ 2 ] } );
-
-		}
-
-		// Process matches to correctly pair names and types
-		const inputs = [];
-		for ( let i = 0; i < propsMatches.length; i ++ ) {
-
-			const { name, type } = propsMatches[ i ];
-
-			let resolvedType = type;
-
-			if ( resolvedType.startsWith( 'ptr' ) ) {
-
-				resolvedType = 'pointer';
-
-			} else {
-
-				if ( resolvedType.startsWith( 'texture' ) ) {
-
-					resolvedType = type.split( '<' )[ 0 ];
-
-				}
-
-				resolvedType = wgslTypeLib[ resolvedType ];
-
-			}
-
-			inputs.push( new NodeFunctionInput( resolvedType, name ) );
+			propsMatches.push( { name: match[ 1 ], type: match[ 2 ] } ); // 保存一组参数条目
 
 		}
 
-		const blockCode = source.substring( declaration[ 0 ].length );
-		const outputType = declaration[ 3 ] || 'void';
+		// 将匹配的参数转换为 NodeFunctionInput
+		const inputs = []; // 解析后的输入数组
+		for ( let i = 0; i < propsMatches.length; i ++ ) { // 遍历参数条目
 
-		const name = declaration[ 1 ] !== undefined ? declaration[ 1 ] : '';
-		const type = wgslTypeLib[ outputType ] || outputType;
+			const { name, type } = propsMatches[ i ]; // 获取参数名与原始类型
 
-		return {
-			type,
-			inputs,
-			name,
-			inputsCode,
-			blockCode,
-			outputType
+			let resolvedType = type; // 最终解析后的类型标识
+
+			if ( resolvedType.startsWith( 'ptr' ) ) { // 指针类型统一视作 pointer
+
+				resolvedType = 'pointer'; // 指定内部 pointer 类型
+
+			} else { // 非指针类型的进一步处理
+
+				if ( resolvedType.startsWith( 'texture' ) ) { // 纹理类型去掉泛型参数
+
+					resolvedType = type.split( '<' )[ 0 ]; // 仅保留基本纹理类型前缀
+
+				} // 结束纹理类型处理
+
+				resolvedType = wgslTypeLib[ resolvedType ]; // 使用映射将 WGSL 类型转换为内部类型
+
+			} // 结束类型判断
+
+			inputs.push( new NodeFunctionInput( resolvedType, name ) ); // 记录一个输入参数描述
+
+		} // 结束参数处理循环
+
+		const blockCode = source.substring( declaration[ 0 ].length ); // 提取函数体代码块
+		const outputType = declaration[ 3 ] || 'void'; // 返回类型，默认 void
+
+		const name = declaration[ 1 ] !== undefined ? declaration[ 1 ] : ''; // 函数名（可能为空）
+		const type = wgslTypeLib[ outputType ] || outputType; // 内部返回类型
+
+		return { // 返回解析结果对象
+			type, // 内部返回类型
+			inputs, // 输入参数数组
+			name, // 函数名称
+			inputsCode, // 原始参数片段代码
+			blockCode, // 函数体代码块
+			outputType // WGSL 原始返回类型
 		};
 
-	} else {
+	} else { // 未匹配到函数声明，抛出异常
 
-		throw new Error( 'FunctionNode: Function is not a WGSL code.' );
+		throw new Error( 'FunctionNode: Function is not a WGSL code.' ); // 非 WGSL 函数格式
 
-	}
+	} // 结束 if 分支
 
-};
+}; // 结束 parse 函数定义
 
 /**
- * This class represents a WSL node function.
+ * 表示一个 WGSL 节点函数的封装。
  *
  * @augments NodeFunction
  */
-class WGSLNodeFunction extends NodeFunction {
+class WGSLNodeFunction extends NodeFunction { // 定义 WGSL 节点函数，继承 NodeFunction
 
 	/**
-	 * Constructs a new WGSL node function.
+	 * 构造一个 WGSL 节点函数对象。
 	 *
-	 * @param {string} source - The WGSL source.
+	 * @param {string} source - WGSL 源码字符串。
 	 */
-	constructor( source ) {
+	constructor( source ) { // 通过 WGSL 源码构造函数节点
 
-		const { type, inputs, name, inputsCode, blockCode, outputType } = parse( source );
+		const { type, inputs, name, inputsCode, blockCode, outputType } = parse( source ); // 先解析源字符串
 
-		super( type, inputs, name );
+		super( type, inputs, name ); // 调用父类构造，设置类型与参数
 
-		this.inputsCode = inputsCode;
-		this.blockCode = blockCode;
-		this.outputType = outputType;
+		this.inputsCode = inputsCode; // 缓存参数段源码
+		this.blockCode = blockCode; // 缓存函数体代码
+		this.outputType = outputType; // 缓存 WGSL 返回类型
 
-	}
+	} // 结束构造器
 
 	/**
-	 * This method returns the WGSL code of the node function.
+	 * 返回该节点函数对应的 WGSL 源码。
 	 *
-	 * @param {string} [name=this.name] - The function's name.
-	 * @return {string} The shader code.
+	 * @param {string} [name=this.name] - 函数名。
+	 * @return {string} 着色器源码。
 	 */
-	getCode( name = this.name ) {
+	getCode( name = this.name ) { // 生成该函数的 WGSL 源码字符串
 
-		const outputType = this.outputType !== 'void' ? '-> ' + this.outputType : '';
+		const outputType = this.outputType !== 'void' ? '-> ' + this.outputType : ''; // 非 void 需要带返回类型箭头
 
-		return `fn ${ name } ( ${ this.inputsCode.trim() } ) ${ outputType }` + this.blockCode;
+		return `fn ${ name } ( ${ this.inputsCode.trim() } ) ${ outputType }` + this.blockCode; // 拼接函数头与函数体
 
-	}
+	} // 结束 getCode 方法
 
-}
+} // 结束 WGSLNodeFunction 类
 
-export default WGSLNodeFunction;
+export default WGSLNodeFunction; // 默认导出 WGSLNodeFunction

@@ -1,105 +1,103 @@
-import Renderer from '../common/Renderer.js';
-import WebGLBackend from '../webgl-fallback/WebGLBackend.js';
-import WebGPUBackend from './WebGPUBackend.js';
-import StandardNodeLibrary from './nodes/StandardNodeLibrary.js';
-/*
-const debugHandler = {
+import Renderer from '../common/Renderer.js'; // 引入通用渲染器基类 Renderer
+import WebGLBackend from '../webgl-fallback/WebGLBackend.js'; // 引入 WebGL 后备渲染后端实现
+import WebGPUBackend from './WebGPUBackend.js'; // 引入 WebGPU 渲染后端实现
+import StandardNodeLibrary from './nodes/StandardNodeLibrary.js'; // 引入标准节点库，用于类型映射
+/* // 调试处理器：通过 Proxy 打印 WebGPUBackend 某些方法调用（可选）
+const debugHandler = { // 定义一个调试处理器对象
 
-	get: function ( target, name ) {
+	get: function ( target, name ) { // 拦截属性访问器，target 为目标对象，name 为属性名
 
-		// Add |update
-		if ( /^(create|destroy)/.test( name ) ) console.log( 'WebGPUBackend.' + name );
+		// 添加 |update（原英文注释：Add |update）
+		if ( /^(create|destroy)/.test( name ) ) console.log( 'WebGPUBackend.' + name ); // 若名称以 create/destroy 开头，则输出日志
 
-		return target[ name ];
+		return target[ name ]; // 返回目标对象对应属性值
 
 	}
 
-};
-*/
+}; // 调试处理器定义结束
+*/ // 默认注释掉，如需调试可配合 Proxy 启用
 
 /**
- * This renderer is the new alternative of `WebGLRenderer`. `WebGPURenderer` has the ability
- * to target different backends. By default, the renderer tries to use a WebGPU backend if the
- * browser supports WebGPU. If not, `WebGPURenderer` falls backs to a WebGL 2 backend.
+ * 简介：这是 `WebGLRenderer` 的全新替代方案。`WebGPURenderer` 能根据环境选择不同后端。
+ *       浏览器支持 WebGPU 时默认使用 WebGPU 后端，否则回退到 WebGL 2 后端。
+ * 参数：无（类定义）。
+ * 返回：无（类定义）。
  *
- * @augments Renderer
+ * @augments Renderer // 继承自 Renderer 基类
  */
-class WebGPURenderer extends Renderer {
+class WebGPURenderer extends Renderer { // 定义 WebGPURenderer 类，继承 Renderer
 
 	/**
-	 * WebGPURenderer options.
+	 * WebGPURenderer 配置项类型定义。
 	 *
 	 * @typedef {Object} WebGPURenderer~Options
-	 * @property {boolean} [logarithmicDepthBuffer=false] - Whether logarithmic depth buffer is enabled or not.
-	 * @property {boolean} [alpha=true] - Whether the default framebuffer (which represents the final contents of the canvas) should be transparent or opaque.
-	 * @property {boolean} [depth=true] - Whether the default framebuffer should have a depth buffer or not.
-	 * @property {boolean} [stencil=false] - Whether the default framebuffer should have a stencil buffer or not.
-	 * @property {boolean} [antialias=false] - Whether MSAA as the default anti-aliasing should be enabled or not.
-	 * @property {number} [samples=0] - When `antialias` is `true`, `4` samples are used by default. Set this parameter to any other integer value than 0 to overwrite the default.
-	 * @property {boolean} [forceWebGL=false] - If set to `true`, the renderer uses a WebGL 2 backend no matter if WebGPU is supported or not.
-	 * @property {boolean} [multiview=false] - If set to `true`, the renderer will use multiview during WebXR rendering if supported.
-	 * @property {number} [outputType=undefined] - Texture type for output to canvas. By default, device's preferred format is used; other formats may incur overhead.
-	 * @property {number} [colorBufferType=HalfFloatType] - Defines the type of color buffers. The default `HalfFloatType` is recommend for best
-	 * quality. To save memory and bandwidth, `UnsignedByteType` might be used. This will reduce rendering quality though.
+	 * @property {boolean} [logarithmicDepthBuffer=false] - 是否启用对数深度缓冲。
+	 * @property {boolean} [alpha=true] - 默认帧缓冲（最终画布内容）是否透明；否则为不透明。
+	 * @property {boolean} [depth=true] - 默认帧缓冲是否包含深度缓冲。
+	 * @property {boolean} [stencil=false] - 默认帧缓冲是否包含模板缓冲。
+	 * @property {boolean} [antialias=false] - 是否启用 MSAA 作为默认抗锯齿。
+	 * @property {number} [samples=0] - 当 `antialias` 为 `true` 时默认使用 4x 采样；设为非 0 的整数可覆盖默认值。
+	 * @property {boolean} [forceWebGL=false] - 若为 `true`，无论是否支持 WebGPU，均使用 WebGL 2 后端。
+	 * @property {boolean} [multiview=false] - 若为 `true` 且支持，在 WebXR 渲染中启用 multiview。
+	 * @property {number} [outputType=undefined] - 输出到画布的纹理类型；默认使用设备首选格式，其他格式可能带来开销。
+	 * @property {number} [colorBufferType=HalfFloatType] - 颜色缓冲区的数据类型。默认 `HalfFloatType` 画质最佳；为节省内存与带宽可用 `UnsignedByteType`，但会降低质量。
 	 */
 
 	/**
-	 * Constructs a new WebGPU renderer.
-	 *
-	 * @param {WebGPURenderer~Options} [parameters] - The configuration parameter.
+	 * 概要：构造一个新的 WebGPU 渲染器。
+	 * 参数：
+	 *   - {WebGPURenderer~Options} [parameters]：配置项。
+	 * 返回：无。
 	 */
-	constructor( parameters = {} ) {
+	constructor( parameters = {} ) { // 构造函数，接收可选配置对象
 
-		let BackendClass;
+		let BackendClass; // 后端类占位，根据条件选择 WebGPU 或 WebGL
 
-		if ( parameters.forceWebGL ) {
+		if ( parameters.forceWebGL ) { // 若强制使用 WebGL，则直接选 WebGL 后端
 
-			BackendClass = WebGLBackend;
+			BackendClass = WebGLBackend; // 选用 WebGL 后端实现
 
-		} else {
+		} else { // 否则尝试 WebGPU 后端，并设置回退逻辑
 
-			BackendClass = WebGPUBackend;
+			BackendClass = WebGPUBackend; // 默认使用 WebGPU 后端
 
-			parameters.getFallback = () => {
+			parameters.getFallback = () => { // 定义回退函数：WebGPU 不可用时返回 WebGL 后端
 
-				console.warn( 'THREE.WebGPURenderer: WebGPU is not available, running under WebGL2 backend.' );
+				console.warn( 'THREE.WebGPURenderer: WebGPU 不可用，正在使用 WebGL2 后端运行。' ); // 输出回退提示
 
-				return new WebGLBackend( parameters );
+				return new WebGLBackend( parameters ); // 基于同一参数创建 WebGL 后端实例
 
-			};
+			}; // 回退函数结束
 
-		}
+		} // 条件分支结束
 
-		const backend = new BackendClass( parameters );
+		const backend = new BackendClass( parameters ); // 实例化所选后端对象
 
-		//super( new Proxy( backend, debugHandler ) );
-		super( backend, parameters );
+		//super( new Proxy( backend, debugHandler ) ); // 可选：通过 Proxy 包装后端以启用调试日志
+		super( backend, parameters ); // 调用父类构造函数，注入后端与配置参数
 
 		/**
-		 * The generic default value is overwritten with the
-		 * standard node library for type mapping.
-		 *
+		 * 概要：用标准节点库覆盖通用默认库，用于类型映射。
 		 * @type {StandardNodeLibrary}
 		 */
-		this.library = new StandardNodeLibrary();
+		this.library = new StandardNodeLibrary(); // 设置节点库以支持节点类型映射
 
 		/**
-		 * This flag can be used for type testing.
-		 *
+		 * 概要：类型标识位，可用于类型检测。
 		 * @type {boolean}
 		 * @readonly
 		 * @default true
 		 */
-		this.isWebGPURenderer = true;
+		this.isWebGPURenderer = true; // 标记该实例为 WebGPURenderer
 
-		if ( typeof __THREE_DEVTOOLS__ !== 'undefined' ) {
+		if ( typeof __THREE_DEVTOOLS__ !== 'undefined' ) { // 如果浏览器存在 THREE 开发者工具钩子
 
-			__THREE_DEVTOOLS__.dispatchEvent( new CustomEvent( 'observe', { detail: this } ) );
+			__THREE_DEVTOOLS__.dispatchEvent( new CustomEvent( 'observe', { detail: this } ) ); // 触发观察事件，注册当前实例
 
-		}
+		} // 条件结束
 
-	}
+	} // 构造函数结束
 
-}
+} // 类定义结束
 
-export default WebGPURenderer;
+export default WebGPURenderer; // 默认导出 WebGPURenderer 类
