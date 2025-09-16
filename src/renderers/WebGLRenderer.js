@@ -2731,19 +2731,19 @@ class WebGLRenderer {
      * @param {?WebGLTexture} depthTexture - 外部深度（或深度/模板）纹理句柄。
      */
     this.setRenderTargetTextures = function (renderTarget, colorTexture, depthTexture) {
-      const renderTargetProperties = properties.get(renderTarget);
+      const renderTargetProperties = properties.get(renderTarget); // 获取渲染目标的内部属性
 
-      renderTargetProperties.__autoAllocateDepthBuffer = renderTarget.resolveDepthBuffer === false;
+      renderTargetProperties.__autoAllocateDepthBuffer = renderTarget.resolveDepthBuffer === false; // 根据 resolveDepthBuffer 决定是否自动分配深度缓冲
       if (renderTargetProperties.__autoAllocateDepthBuffer === false) {
         // The multisample_render_to_texture extension doesn't work properly if there
         // are midframe flushes and an external depth buffer. Disable use of the extension.
-        renderTargetProperties.__useRenderToTexture = false;
+        renderTargetProperties.__useRenderToTexture = false; // 存在外部深度缓冲时禁用 render-to-texture 扩展路径
       }
 
-      properties.get(renderTarget.texture).__webglTexture = colorTexture;
-      properties.get(renderTarget.depthTexture).__webglTexture = renderTargetProperties.__autoAllocateDepthBuffer ? undefined : depthTexture;
+      properties.get(renderTarget.texture).__webglTexture = colorTexture; // 将外部颜色纹理句柄绑定到 renderTarget 的内部记录
+      properties.get(renderTarget.depthTexture).__webglTexture = renderTargetProperties.__autoAllocateDepthBuffer ? undefined : depthTexture; // 如未自动分配深度则使用外部深度纹理
 
-      renderTargetProperties.__hasExternalTextures = true;
+      renderTargetProperties.__hasExternalTextures = true; // 标记该渲染目标正在使用外部提供的纹理
     };
 
     /**
@@ -2761,9 +2761,9 @@ class WebGLRenderer {
      *                                                  传入 `undefined` 表示使用默认 FBO。
      */
     this.setRenderTargetFramebuffer = function (renderTarget, defaultFramebuffer) {
-      const renderTargetProperties = properties.get(renderTarget);
-      renderTargetProperties.__webglFramebuffer = defaultFramebuffer;
-      renderTargetProperties.__useDefaultFramebuffer = defaultFramebuffer === undefined;
+      const renderTargetProperties = properties.get(renderTarget); // 获取渲染目标的内部属性
+      renderTargetProperties.__webglFramebuffer = defaultFramebuffer; // 记录外部/默认帧缓冲对象（可能为 undefined）
+      renderTargetProperties.__useDefaultFramebuffer = defaultFramebuffer === undefined; // 标记是否走默认帧缓冲路径
     };
 
     const _scratchFrameBuffer = _gl.createFramebuffer();
@@ -2788,111 +2788,111 @@ class WebGLRenderer {
      * @param {number} [activeMipmapLevel=0] - 活动的 mipmap 级别。
      */
     this.setRenderTarget = function (renderTarget, activeCubeFace = 0, activeMipmapLevel = 0) {
-      _currentRenderTarget = renderTarget;
-      _currentActiveCubeFace = activeCubeFace;
-      _currentActiveMipmapLevel = activeMipmapLevel;
+      _currentRenderTarget = renderTarget; // 记录当前渲染目标
+      _currentActiveCubeFace = activeCubeFace; // 记录活动的立方体面/图层索引
+      _currentActiveMipmapLevel = activeMipmapLevel; // 记录活动的 mipmap 级别
 
-      let useDefaultFramebuffer = true;
-      let framebuffer = null;
-      let isCube = false;
-      let isRenderTarget3D = false;
+      let useDefaultFramebuffer = true; // 是否走默认帧缓冲路径（由状态机处理附件）
+      let framebuffer = null; // 将要绑定的帧缓冲对象
+      let isCube = false; // 是否为立方体渲染目标
+      let isRenderTarget3D = false; // 是否为 3D/数组渲染目标
 
-      if (renderTarget) {
-        const renderTargetProperties = properties.get(renderTarget);
+      if (renderTarget) { // 当指定了渲染目标
+        const renderTargetProperties = properties.get(renderTarget); // 获取渲染目标内部属性
 
-        if (renderTargetProperties.__useDefaultFramebuffer !== undefined) {
+        if (renderTargetProperties.__useDefaultFramebuffer !== undefined) { // 如标记为使用默认帧缓冲
           // We need to make sure to rebind the framebuffer.
-          state.bindFramebuffer(_gl.FRAMEBUFFER, null);
-          useDefaultFramebuffer = false;
-        } else if (renderTargetProperties.__webglFramebuffer === undefined) {
-          textures.setupRenderTarget(renderTarget);
-        } else if (renderTargetProperties.__hasExternalTextures) {
+          state.bindFramebuffer(_gl.FRAMEBUFFER, null); // 绑定默认 FBO（null）以确保状态一致
+          useDefaultFramebuffer = false; // 仍需调用 drawBuffers 来配置颜色附件
+        } else if (renderTargetProperties.__webglFramebuffer === undefined) { // 尚未创建 FBO
+          textures.setupRenderTarget(renderTarget); // 初始化并创建渲染目标所需的 FBO/附件
+        } else if (renderTargetProperties.__hasExternalTextures) { // 使用外部纹理的渲染目标
           // Color and depth texture must be rebound in order for the swapchain to update.
-          textures.rebindTextures(renderTarget, properties.get(renderTarget.texture).__webglTexture, properties.get(renderTarget.depthTexture).__webglTexture);
-        } else if (renderTarget.depthBuffer) {
+          textures.rebindTextures(renderTarget, properties.get(renderTarget.texture).__webglTexture, properties.get(renderTarget.depthTexture).__webglTexture); // 重新绑定外部颜色/深度纹理
+        } else if (renderTarget.depthBuffer) { // 存在深度缓冲/纹理时的检查与同步
           // check if the depth texture is already bound to the frame buffer and that it's been initialized
-          const depthTexture = renderTarget.depthTexture;
-          if (renderTargetProperties.__boundDepthTexture !== depthTexture) {
+          const depthTexture = renderTarget.depthTexture; // 当前深度纹理引用
+          if (renderTargetProperties.__boundDepthTexture !== depthTexture) { // 若已绑定的深度纹理不一致
             // check if the depth texture is compatible
             if (depthTexture !== null && properties.has(depthTexture) && (renderTarget.width !== depthTexture.image.width || renderTarget.height !== depthTexture.image.height)) {
-              throw new Error("WebGLRenderTarget: Attached DepthTexture is initialized to the incorrect size.");
+              throw new Error("WebGLRenderTarget: Attached DepthTexture is initialized to the incorrect size."); // 尺寸不匹配则抛错
             }
 
             // Swap the depth buffer to the currently attached one
-            textures.setupDepthRenderbuffer(renderTarget);
+            textures.setupDepthRenderbuffer(renderTarget); // 切换/重新配置深度渲染缓冲/纹理绑定
           }
         }
 
-        const texture = renderTarget.texture;
+        const texture = renderTarget.texture; // 渲染目标的主纹理
 
-        if (texture.isData3DTexture || texture.isDataArrayTexture || texture.isCompressedArrayTexture) {
-          isRenderTarget3D = true;
+        if (texture.isData3DTexture || texture.isDataArrayTexture || texture.isCompressedArrayTexture) { // 若为 3D/数组纹理类型
+          isRenderTarget3D = true; // 后续采用按图层绑定的路径
         }
 
-        const __webglFramebuffer = properties.get(renderTarget).__webglFramebuffer;
+        const __webglFramebuffer = properties.get(renderTarget).__webglFramebuffer; // 取得对应的 FBO（可能是数组）
 
-        if (renderTarget.isWebGLCubeRenderTarget) {
-          if (Array.isArray(__webglFramebuffer[activeCubeFace])) {
-            framebuffer = __webglFramebuffer[activeCubeFace][activeMipmapLevel];
+        if (renderTarget.isWebGLCubeRenderTarget) { // 立方体渲染目标
+          if (Array.isArray(__webglFramebuffer[activeCubeFace])) { // 不同 mip 级别以数组形式存储
+            framebuffer = __webglFramebuffer[activeCubeFace][activeMipmapLevel]; // 取指定面的指定 mip 级别 FBO
           } else {
-            framebuffer = __webglFramebuffer[activeCubeFace];
+            framebuffer = __webglFramebuffer[activeCubeFace]; // 取指定面的 FBO
           }
 
-          isCube = true;
-        } else if (renderTarget.samples > 0 && textures.useMultisampledRTT(renderTarget) === false) {
-          framebuffer = properties.get(renderTarget).__webglMultisampledFramebuffer;
+          isCube = true; // 标记为立方体渲染
+        } else if (renderTarget.samples > 0 && textures.useMultisampledRTT(renderTarget) === false) { // 多重采样但不走 RTT 扩展
+          framebuffer = properties.get(renderTarget).__webglMultisampledFramebuffer; // 使用多重采样 FBO
         } else {
-          if (Array.isArray(__webglFramebuffer)) {
-            framebuffer = __webglFramebuffer[activeMipmapLevel];
+          if (Array.isArray(__webglFramebuffer)) { // 普通 2D 渲染目标，可能有多个 mip 级别的 FBO
+            framebuffer = __webglFramebuffer[activeMipmapLevel]; // 选取对应 mip 级别的 FBO
           } else {
-            framebuffer = __webglFramebuffer;
+            framebuffer = __webglFramebuffer; // 单一 FBO 情况
           }
         }
 
-        _currentViewport.copy(renderTarget.viewport);
-        _currentScissor.copy(renderTarget.scissor);
-        _currentScissorTest = renderTarget.scissorTest;
-      } else {
-        _currentViewport.copy(_viewport).multiplyScalar(_pixelRatio).floor();
-        _currentScissor.copy(_scissor).multiplyScalar(_pixelRatio).floor();
-        _currentScissorTest = _scissorTest;
+        _currentViewport.copy(renderTarget.viewport); // 同步视口为渲染目标自带设置
+        _currentScissor.copy(renderTarget.scissor); // 同步裁剪矩形
+        _currentScissorTest = renderTarget.scissorTest; // 同步裁剪测试开关
+      } else { // 未传入渲染目标，回退画布
+        _currentViewport.copy(_viewport).multiplyScalar(_pixelRatio).floor(); // 使用渲染器全局视口（按像素比缩放并取整）
+        _currentScissor.copy(_scissor).multiplyScalar(_pixelRatio).floor(); // 使用渲染器全局裁剪矩形
+        _currentScissorTest = _scissorTest; // 使用渲染器全局裁剪测试开关
       }
 
       // Use a scratch frame buffer if rendering to a mip level to avoid depth buffers
       // being bound that are different sizes.
-      if (activeMipmapLevel !== 0) {
-        framebuffer = _scratchFrameBuffer;
+      if (activeMipmapLevel !== 0) { // 渲染到非 0 级 mip 时
+        framebuffer = _scratchFrameBuffer; // 使用临时 FBO，避免深度附件尺寸不一致
       }
 
-      const framebufferBound = state.bindFramebuffer(_gl.FRAMEBUFFER, framebuffer);
+      const framebufferBound = state.bindFramebuffer(_gl.FRAMEBUFFER, framebuffer); // 绑定/切换到目标 FBO
 
-      if (framebufferBound && useDefaultFramebuffer) {
-        state.drawBuffers(renderTarget, framebuffer);
+      if (framebufferBound && useDefaultFramebuffer) { // 如果发生了绑定并且走默认 FBO 路径
+        state.drawBuffers(renderTarget, framebuffer); // 设置颜色写入附件（支持 MRT）
       }
 
-      state.viewport(_currentViewport);
-      state.scissor(_currentScissor);
-      state.setScissorTest(_currentScissorTest);
+      state.viewport(_currentViewport); // 应用视口状态
+      state.scissor(_currentScissor); // 应用裁剪矩形
+      state.setScissorTest(_currentScissorTest); // 应用裁剪测试状态
 
-      if (isCube) {
-        const textureProperties = properties.get(renderTarget.texture);
-        _gl.framebufferTexture2D(_gl.FRAMEBUFFER, _gl.COLOR_ATTACHMENT0, _gl.TEXTURE_CUBE_MAP_POSITIVE_X + activeCubeFace, textureProperties.__webglTexture, activeMipmapLevel);
-      } else if (isRenderTarget3D) {
-        const layer = activeCubeFace;
+      if (isCube) { // 立方体渲染目标需绑定具体面的颜色附件
+        const textureProperties = properties.get(renderTarget.texture); // 获取主纹理属性
+        _gl.framebufferTexture2D(_gl.FRAMEBUFFER, _gl.COLOR_ATTACHMENT0, _gl.TEXTURE_CUBE_MAP_POSITIVE_X + activeCubeFace, textureProperties.__webglTexture, activeMipmapLevel); // 绑定立方体指定面与 mip 级别
+      } else if (isRenderTarget3D) { // 3D/数组纹理按图层绑定
+        const layer = activeCubeFace; // 使用 activeCubeFace 作为层索引
 
-        for (let i = 0; i < renderTarget.textures.length; i++) {
-          const textureProperties = properties.get(renderTarget.textures[i]);
+        for (let i = 0; i < renderTarget.textures.length; i++) { // 逐个颜色附件绑定对应层
+          const textureProperties = properties.get(renderTarget.textures[i]); // 获取每个附件的纹理属性
 
-          _gl.framebufferTextureLayer(_gl.FRAMEBUFFER, _gl.COLOR_ATTACHMENT0 + i, textureProperties.__webglTexture, activeMipmapLevel, layer);
+          _gl.framebufferTextureLayer(_gl.FRAMEBUFFER, _gl.COLOR_ATTACHMENT0 + i, textureProperties.__webglTexture, activeMipmapLevel, layer); // 绑定图层附件
         }
-      } else if (renderTarget !== null && activeMipmapLevel !== 0) {
+      } else if (renderTarget !== null && activeMipmapLevel !== 0) { // 普通 2D 渲染目标渲染到特定 mip 级别
         // Only bind the frame buffer if we are using a scratch frame buffer to render to a mipmap.
         // If we rebind the texture when using a multi sample buffer then an error about inconsistent samples will be thrown.
-        const textureProperties = properties.get(renderTarget.texture);
-        _gl.framebufferTexture2D(_gl.FRAMEBUFFER, _gl.COLOR_ATTACHMENT0, _gl.TEXTURE_2D, textureProperties.__webglTexture, activeMipmapLevel);
+        const textureProperties = properties.get(renderTarget.texture); // 获取主纹理属性
+        _gl.framebufferTexture2D(_gl.FRAMEBUFFER, _gl.COLOR_ATTACHMENT0, _gl.TEXTURE_2D, textureProperties.__webglTexture, activeMipmapLevel); // 绑定对应 mip 级别的颜色附件
       }
 
-      _currentMaterialId = -1; // reset current material to ensure correct uniform bindings
+      _currentMaterialId = -1; // 重置当前材质 ID，确保下次 uniform 绑定正确
     };
 
     /**
@@ -2908,28 +2908,28 @@ class WebGLRenderer {
      * @param {number} [activeCubeFaceIndex] - 活动的立方体贴图面索引
      * @param {number} [textureIndex=0] - MRT渲染目标的纹理索引
      */
-    this.readRenderTargetPixels = function (renderTarget, x, y, width, height, buffer, activeCubeFaceIndex, textureIndex = 0) {
+    this.readRenderTargetPixels = function (renderTarget, x, y, width, height, buffer, activeCubeFaceIndex, textureIndex = 0) { // 同步读取渲染目标像素
       // 验证渲染目标是否有效
-      if (!(renderTarget && renderTarget.isWebGLRenderTarget)) {
-        console.error("THREE.WebGLRenderer.readRenderTargetPixels: renderTarget is not THREE.WebGLRenderTarget.");
-        return;
+      if (!(renderTarget && renderTarget.isWebGLRenderTarget)) { // 校验：必须为 WebGLRenderTarget
+        console.error("THREE.WebGLRenderer.readRenderTargetPixels: renderTarget is not THREE.WebGLRenderTarget."); // 打印错误信息
+        return; // 直接返回
       }
 
       // 获取帧缓冲区
-      let framebuffer = properties.get(renderTarget).__webglFramebuffer;
+      let framebuffer = properties.get(renderTarget).__webglFramebuffer; // 取该渲染目标的 FBO
 
       // 如果是立方体渲染目标且指定了面索引，获取对应面的帧缓冲区
-      if (renderTarget.isWebGLCubeRenderTarget && activeCubeFaceIndex !== undefined) {
-        framebuffer = framebuffer[activeCubeFaceIndex];
+      if (renderTarget.isWebGLCubeRenderTarget && activeCubeFaceIndex !== undefined) { // 立方体目标并指定了面索引
+        framebuffer = framebuffer[activeCubeFaceIndex]; // 选择对应面的 FBO
       }
 
-      if (framebuffer) {
+      if (framebuffer) { // 仅在存在可用 FBO 时读取
         // 绑定帧缓冲区
-        state.bindFramebuffer(_gl.FRAMEBUFFER, framebuffer);
+        state.bindFramebuffer(_gl.FRAMEBUFFER, framebuffer); // 绑定读取源 FBO
 
-        try {
+        try { // try/finally 确保后续能恢复绑定
           // 获取纹理信息
-          const texture = renderTarget.textures[textureIndex];
+          const texture = renderTarget.textures[textureIndex]; // 选择要读取的颜色附件
           const textureFormat = texture.format; // 纹理格式
           const textureType = texture.type; // 纹理类型
 
@@ -2947,19 +2947,19 @@ class WebGLRenderer {
 
           // 以下if语句确保有效的读取请求（没有越界像素，参见 #8604）
 
-          if (x >= 0 && x <= renderTarget.width - width && y >= 0 && y <= renderTarget.height - height) {
+          if (x >= 0 && x <= renderTarget.width - width && y >= 0 && y <= renderTarget.height - height) { // 读取区域在有效范围内
             // 当使用MRT时，为后续读取命令选择正确的颜色缓冲区
 
-            if (renderTarget.textures.length > 1) _gl.readBuffer(_gl.COLOR_ATTACHMENT0 + textureIndex);
+            if (renderTarget.textures.length > 1) _gl.readBuffer(_gl.COLOR_ATTACHMENT0 + textureIndex); // MRT：选择读取的颜色附件
 
             // 读取像素数据
-            _gl.readPixels(x, y, width, height, utils.convert(textureFormat), utils.convert(textureType), buffer);
+            _gl.readPixels(x, y, width, height, utils.convert(textureFormat), utils.convert(textureType), buffer); // 读取像素到 CPU 缓冲
           }
-        } finally {
+        } finally { // 无论是否成功都恢复 FBO 绑定
           // 如果需要，恢复当前渲染目标的帧缓冲区
 
-          const framebuffer = _currentRenderTarget !== null ? properties.get(_currentRenderTarget).__webglFramebuffer : null;
-          state.bindFramebuffer(_gl.FRAMEBUFFER, framebuffer);
+          const framebuffer = _currentRenderTarget !== null ? properties.get(_currentRenderTarget).__webglFramebuffer : null; // 取当前活动 FBO（或 null）
+          state.bindFramebuffer(_gl.FRAMEBUFFER, framebuffer); // 恢复 FBO 绑定
         }
       }
     };
@@ -2981,23 +2981,23 @@ class WebGLRenderer {
      * @param {number} [textureIndex=0] - MRT 渲染目标的纹理索引
      * @return {Promise<TypedArray>} 当读取完成时解析的 Promise，解析值为包含读取数据的类型化数组
      */
-    this.readRenderTargetPixelsAsync = async function (renderTarget, x, y, width, height, buffer, activeCubeFaceIndex, textureIndex = 0) {
-      if (!(renderTarget && renderTarget.isWebGLRenderTarget)) {
-        throw new Error("THREE.WebGLRenderer.readRenderTargetPixels: renderTarget is not THREE.WebGLRenderTarget.");
+    this.readRenderTargetPixelsAsync = async function (renderTarget, x, y, width, height, buffer, activeCubeFaceIndex, textureIndex = 0) { // 异步读取渲染目标像素
+      if (!(renderTarget && renderTarget.isWebGLRenderTarget)) { // 校验：必须是 WebGLRenderTarget
+        throw new Error("THREE.WebGLRenderer.readRenderTargetPixels: renderTarget is not THREE.WebGLRenderTarget."); // 参数错误
       }
 
-      let framebuffer = properties.get(renderTarget).__webglFramebuffer;
-      if (renderTarget.isWebGLCubeRenderTarget && activeCubeFaceIndex !== undefined) {
-        framebuffer = framebuffer[activeCubeFaceIndex];
+      let framebuffer = properties.get(renderTarget).__webglFramebuffer; // 获取目标 FBO
+      if (renderTarget.isWebGLCubeRenderTarget && activeCubeFaceIndex !== undefined) { // 立方体目标指定面
+        framebuffer = framebuffer[activeCubeFaceIndex]; // 选择对应面 FBO
       }
 
       if (framebuffer) {
         // 以下 if 语句确保有效的读取请求（无越界像素，参见 #8604）
         if (x >= 0 && x <= renderTarget.width - width && y >= 0 && y <= renderTarget.height - height) {
           // 设置活动帧缓冲区为我们要读取的缓冲区
-          state.bindFramebuffer(_gl.FRAMEBUFFER, framebuffer);
+          state.bindFramebuffer(_gl.FRAMEBUFFER, framebuffer); // 绑定待读 FBO
 
-          const texture = renderTarget.textures[textureIndex];
+          const texture = renderTarget.textures[textureIndex]; // 目标颜色附件纹理
           const textureFormat = texture.format;
           const textureType = texture.type;
 
@@ -3009,36 +3009,36 @@ class WebGLRenderer {
             throw new Error("THREE.WebGLRenderer.readRenderTargetPixelsAsync: renderTarget is not in UnsignedByteType or implementation defined type.");
           }
 
-          const glBuffer = _gl.createBuffer();
-          _gl.bindBuffer(_gl.PIXEL_PACK_BUFFER, glBuffer);
-          _gl.bufferData(_gl.PIXEL_PACK_BUFFER, buffer.byteLength, _gl.STREAM_READ);
+          const glBuffer = _gl.createBuffer(); // 创建 PBO
+          _gl.bindBuffer(_gl.PIXEL_PACK_BUFFER, glBuffer); // 绑定像素打包缓冲
+          _gl.bufferData(_gl.PIXEL_PACK_BUFFER, buffer.byteLength, _gl.STREAM_READ); // 分配读取容量
 
           // 使用 MRT 时，为后续读取命令选择正确的颜色缓冲区
 
-          if (renderTarget.textures.length > 1) _gl.readBuffer(_gl.COLOR_ATTACHMENT0 + textureIndex);
+          if (renderTarget.textures.length > 1) _gl.readBuffer(_gl.COLOR_ATTACHMENT0 + textureIndex); // MRT：选择颜色附件
 
-          _gl.readPixels(x, y, width, height, utils.convert(textureFormat), utils.convert(textureType), 0);
+          _gl.readPixels(x, y, width, height, utils.convert(textureFormat), utils.convert(textureType), 0); // 读取到 PBO 偏移 0
 
           // 在等待之前将帧缓冲区重置为当前设置的缓冲区
-          const currFramebuffer = _currentRenderTarget !== null ? properties.get(_currentRenderTarget).__webglFramebuffer : null;
-          state.bindFramebuffer(_gl.FRAMEBUFFER, currFramebuffer);
+          const currFramebuffer = _currentRenderTarget !== null ? properties.get(_currentRenderTarget).__webglFramebuffer : null; // 当前活动 FBO
+          state.bindFramebuffer(_gl.FRAMEBUFFER, currFramebuffer); // 恢复原 FBO
 
           // 每 8 毫秒检查一次命令是否完成
-          const sync = _gl.fenceSync(_gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+          const sync = _gl.fenceSync(_gl.SYNC_GPU_COMMANDS_COMPLETE, 0); // 插入同步对象
 
-          _gl.flush();
+          _gl.flush(); // 刷新命令
 
-          await probeAsync(_gl, sync, 4);
+          await probeAsync(_gl, sync, 4); // 轮询同步对象
 
           // 读取数据并删除缓冲区
-          _gl.bindBuffer(_gl.PIXEL_PACK_BUFFER, glBuffer);
-          _gl.getBufferSubData(_gl.PIXEL_PACK_BUFFER, 0, buffer);
-          _gl.deleteBuffer(glBuffer);
-          _gl.deleteSync(sync);
+          _gl.bindBuffer(_gl.PIXEL_PACK_BUFFER, glBuffer); // 重新绑定 PBO
+          _gl.getBufferSubData(_gl.PIXEL_PACK_BUFFER, 0, buffer); // 从 PBO 取回数据
+          _gl.deleteBuffer(glBuffer); // 删除 PBO
+          _gl.deleteSync(sync); // 删除同步对象
 
-          return buffer;
+          return buffer; // 返回读取结果
         } else {
-          throw new Error("THREE.WebGLRenderer.readRenderTargetPixelsAsync: requested read bounds are out of range.");
+          throw new Error("THREE.WebGLRenderer.readRenderTargetPixelsAsync: requested read bounds are out of range."); // 越界错误
         }
       }
     };
@@ -3051,25 +3051,25 @@ class WebGLRenderer {
      * @param {?Vector2} [position=null] - 复制操作的起始位置
      * @param {number} [level=0] - mip级别，默认值表示基础mip
      */
-    this.copyFramebufferToTexture = function (texture, position = null, level = 0) {
+    this.copyFramebufferToTexture = function (texture, position = null, level = 0) { // 从当前 FBO 复制像素到纹理
       // 计算当前mip级别的缩放比例
-      const levelScale = Math.pow(2, -level);
+      const levelScale = Math.pow(2, -level); // 该 mip 级别的缩放因子
       // 根据缩放比例计算实际的宽度和高度
-      const width = Math.floor(texture.image.width * levelScale);
-      const height = Math.floor(texture.image.height * levelScale);
+      const width = Math.floor(texture.image.width * levelScale); // 复制区域宽度（按 mip 缩放）
+      const height = Math.floor(texture.image.height * levelScale); // 复制区域高度（按 mip 缩放）
 
       // 确定复制的起始位置
-      const x = position !== null ? position.x : 0;
-      const y = position !== null ? position.y : 0;
+      const x = position !== null ? position.x : 0; // 源起点 x
+      const y = position !== null ? position.y : 0; // 源起点 y
 
       // 设置目标纹理
-      textures.setTexture2D(texture, 0);
+      textures.setTexture2D(texture, 0); // 绑定目标 2D 纹理
 
       // 从帧缓冲区复制像素数据到纹理
-      _gl.copyTexSubImage2D(_gl.TEXTURE_2D, level, 0, 0, x, y, width, height);
+      _gl.copyTexSubImage2D(_gl.TEXTURE_2D, level, 0, 0, x, y, width, height); // 执行拷贝到纹理 (0,0)
 
       // 解绑纹理
-      state.unbindTexture();
+      state.unbindTexture(); // 解绑活跃纹理
     };
 
     // 创建用于纹理复制的帧缓冲区
@@ -3090,17 +3090,17 @@ class WebGLRenderer {
      * @param {number} [srcLevel=0] - 要复制的源mipmap级别
      * @param {?number} [dstLevel=null] - 目标mipmap级别
      */
-    this.copyTextureToTexture = function (srcTexture, dstTexture, srcRegion = null, dstPosition = null, srcLevel = 0, dstLevel = null) {
+    this.copyTextureToTexture = function (srcTexture, dstTexture, srcRegion = null, dstPosition = null, srcLevel = 0, dstLevel = null) { // 纹理到纹理复制
       // 支持之前只有单个目标mipmap级别的函数签名
-      if (dstLevel === null) {
-        if (srcLevel !== 0) {
+      if (dstLevel === null) { // 兼容旧签名：未提供 dstLevel
+        if (srcLevel !== 0) { // 旧用法：将 srcLevel 作为 dstLevel 使用
           // @deprecated, r171 - 已弃用的用法
-          warnOnce("WebGLRenderer: copyTextureToTexture function signature has changed to support src and dst mipmap levels.");
-          dstLevel = srcLevel;
-          srcLevel = 0;
+          warnOnce("WebGLRenderer: copyTextureToTexture function signature has changed to support src and dst mipmap levels."); // 提示签名变化
+          dstLevel = srcLevel; // 将源级别作为目标级别
+          srcLevel = 0; // 源级别重置为 0
         } else {
-          dstLevel = 0;
-        }
+          dstLevel = 0; // 默认目标级别为 0
+      }
       }
 
       // ===== 收集复制所需的尺寸信息 =====
