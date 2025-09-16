@@ -2717,6 +2717,19 @@ class WebGLRenderer {
       return _currentRenderTarget;
     };
 
+    /**
+     * 绑定外部纹理到渲染目标。
+     *
+     * 用于将平台/外部创建的底层 GPU 纹理（颜色、深度）与 three.js 的
+     * `WebGLRenderTarget` 建立关联，以便作为渲染输出目标使用。
+     *
+     * 注意：当提供了外部深度缓冲纹理时，为避免与 `multisample_render_to_texture`
+     * 扩展的兼容性问题（如在一帧中多次 flush 时），会禁用该扩展路径。
+     *
+     * @param {WebGLRenderTarget} renderTarget - 要配置的渲染目标。
+     * @param {WebGLTexture} colorTexture - 外部颜色纹理句柄（GL 纹理对象）。
+     * @param {?WebGLTexture} depthTexture - 外部深度（或深度/模板）纹理句柄。
+     */
     this.setRenderTargetTextures = function (renderTarget, colorTexture, depthTexture) {
       const renderTargetProperties = properties.get(renderTarget);
 
@@ -2733,6 +2746,20 @@ class WebGLRenderer {
       renderTargetProperties.__hasExternalTextures = true;
     };
 
+    /**
+     * 绑定外部帧缓冲到渲染目标。
+     *
+     * 允许为 `WebGLRenderTarget` 指定一个平台/外部提供的默认帧缓冲（如某些
+     * 集成场景或平台交换链提供的 FBO）。若传入 `undefined`，则标记该渲染目标
+     * 使用“默认帧缓冲”路径（即由当前上下文的默认 FBO/画布驱动）。
+     *
+     * 该配置会影响后续 `setRenderTarget` 的绑定逻辑：当检测到使用默认帧缓冲
+     * 路径时，需要确保在切换时正确地将绑定恢复到 `null`，以使用上下文默认 FBO。
+     *
+     * @param {WebGLRenderTarget} renderTarget - 要配置的渲染目标。
+     * @param {?WebGLFramebuffer} defaultFramebuffer - 外部提供的帧缓冲对象；
+     *                                                  传入 `undefined` 表示使用默认 FBO。
+     */
     this.setRenderTargetFramebuffer = function (renderTarget, defaultFramebuffer) {
       const renderTargetProperties = properties.get(renderTarget);
       renderTargetProperties.__webglFramebuffer = defaultFramebuffer;
@@ -2742,13 +2769,23 @@ class WebGLRenderer {
     const _scratchFrameBuffer = _gl.createFramebuffer();
 
     /**
-     * Sets the active rendertarget.
+     * 设置当前活动的渲染目标。
      *
-     * @param {?WebGLRenderTarget} renderTarget - The render target to set. When `null` is given,
-     * the canvas is set as the active render target instead.
-     * @param {number} [activeCubeFace=0] - The active cube face when using a cube render target.
-     * Indicates the z layer to render in to when using 3D or array render targets.
-     * @param {number} [activeMipmapLevel=0] - The active mipmap level.
+     * - 当 `renderTarget` 为 `null` 时，切换为画布（默认帧缓冲）作为渲染目标。
+     * - 当为立方体渲染目标时，`activeCubeFace` 指定当前渲染的立方体面。
+     * - 当为 3D/数组纹理渲染目标时，`activeCubeFace` 充当要渲染的图层（z 层）索引。
+     * - 可以通过 `activeMipmapLevel` 指定渲染的 mip 级别；非 0 级时会使用内部
+     *   临时帧缓冲，以避免因深度缓冲尺寸不一致而导致的绑定错误。
+     *
+     * 该方法会：
+     * - 根据渲染目标类型选择/创建并绑定正确的 FBO（多重采样、立方体、数组/3D 等）。
+     * - 在必要时重新绑定外部颜色/深度纹理（如交换链更新时）。
+     * - 将视口、裁剪矩形和裁剪测试状态同步为渲染目标自带的设置（或回退到渲染器设置）。
+     * - 对于渲染到特定 mip 级别的情况，绑定对应的纹理附件。
+     *
+     * @param {?WebGLRenderTarget} renderTarget - 要设置的渲染目标；`null` 表示画布。
+     * @param {number} [activeCubeFace=0] - 立方体贴图的活动面索引；对 3D/数组纹理为层索引。
+     * @param {number} [activeMipmapLevel=0] - 活动的 mipmap 级别。
      */
     this.setRenderTarget = function (renderTarget, activeCubeFace = 0, activeMipmapLevel = 0) {
       _currentRenderTarget = renderTarget;
